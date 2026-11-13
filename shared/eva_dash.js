@@ -43,13 +43,14 @@ class EvaDash extends EvaHud {
         if (s !== 'dash' && s !== 'both') return 'off';
         const design = this._dashDesign();
         if (design === 'off') return 'off';
+        if (design === 'shadow') return 'shadow_' + this._driveProfile();
         return CENTRE_DESIGNS.indexOf(design) >= 0 || WHOLE_DESIGNS.indexOf(design) >= 0 ? design : 'eva';
     }
     _layoutFile(name) {
         if (name === 'off') return name;
         return name === 'alert' && this._isCentre() ? 'dash_centre_alert' : 'dash_' + name;
     }
-    _layoutLabel(name) { return name === 'eva' ? 'EVA' : 'Design ' + name.toUpperCase(); }
+    _layoutLabel(name) { return name === 'eva' ? 'EVA' : name.indexOf('shadow') === 0 ? 'Shadow' : 'Design ' + name.toUpperCase(); }
     _isCentre() { return CENTRE_DESIGNS.indexOf(this._layoutName()) >= 0; }
     _followsDriveMode() { const s = this._screens(); return s === 'dash' || s === 'both'; }
     _layerFields() { return this.target === 'map' ? { contend: 1, guide_hold: 0 } : {}; }
@@ -68,7 +69,7 @@ class EvaDash extends EvaHud {
     _range() { return this.primary._range(); }
     _alertNow() { return this.primary.alertShow; }
 
-    _isBigImage(w) { return w.type === 'evagear' || w.type === 'evacanvas'; }
+    _isBigImage(w) { return w.type === 'evagear' || w.type === 'evacanvas' || w.type === 'evaphoto'; }
 
     _yieldToPopup(now) { return this.target === 'map' ? false : super._yieldToPopup(now); }
 

@@ -1251,6 +1251,10 @@ def main(x, y, w, h):
     dash_e3 = attempt('dash_e3', lambda: build_dash_e3(fonts_dir, refuse))
     if skipped:
         print('SKIPPED (did not fit this font): ' + '; '.join(skipped))
+    # Cover test: high-z opaque strip over the bottom band (where BMW's status line sits) on the whole-cluster layouts.
+    for doc in (dash, dash_d, dash_c3, dash_e3):
+        if doc is not None:
+            doc['widgets'].append({'id': 'botcover', 'type': 'fill', 'x': 0, 'y': 636, 'w': 1920, 'h': 84, 'color': 'black', 'class': 'overlay', 'z': 20, 'keepInAlert': True})
     for f in os.listdir(fonts_dir):
         shutil.move(os.path.join(fonts_dir, f), os.path.join(APP, 'fonts', f))
     shutil.rmtree(fonts_dir)

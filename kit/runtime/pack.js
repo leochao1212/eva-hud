@@ -52,6 +52,13 @@ function openPack(file) {
     return {
         packed: true,
         has: (rel) => !!(index.files[rel] || index.split[rel]),
+        bytes(rel) {
+            const e = index.files[rel];
+            if (!e) return null;
+            const b = Buffer.alloc(e[1]);
+            fs.readSync(fd, b, 0, e[1], base + e[0]);
+            try { return zlib.inflateRawSync(b); } catch (err) { return null; }
+        },
         json(rel) {
             if (!index.split[rel]) return part(rel);
             // a split file asked for whole: put its parts back together (avoid for big tables)
@@ -79,6 +86,7 @@ function openFolder(dir) {
     return {
         packed: false,
         has: (rel) => fs.existsSync(path.join(dir, rel)),
+        bytes: (rel) => { try { return fs.readFileSync(path.join(dir, rel)); } catch (e) { return null; } },
         json,
         get: (rel, key) => json(rel)[String(key)],
     };

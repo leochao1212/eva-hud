@@ -410,6 +410,18 @@
      }
     }
    ]
+  },
+  {
+   "id": "botcover",
+   "type": "fill",
+   "x": 0,
+   "y": 636,
+   "w": 1920,
+   "h": 84,
+   "color": "black",
+   "class": "overlay",
+   "z": 20,
+   "keepInAlert": true
   }
  ]
 }

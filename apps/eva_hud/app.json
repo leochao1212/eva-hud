@@ -2,7 +2,7 @@
   "id": "eva_hud",
   "title": "EVA",
   "description": "NERV battle display on the windshield HUD and the instrument cluster: giant gear, rev bar, speed and full-screen title-card alerts",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "vendor": "custom",
   "loggingId": "OAEV",
   "iconGlyph": "EVA",
@@ -119,7 +119,7 @@
       "label": "Comfort dash (Dash only)",
       "type": "choice",
       "default": "whole",
-      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["off", "Off (BMW's own)"]],
+      "options": [["whole", "Original (whole cluster)"], ["shadow", "Shadow (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "dash"}]
     },
     {
@@ -127,7 +127,7 @@
       "label": "Sport dash (Dash only)",
       "type": "choice",
       "default": "whole",
-      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["off", "Off (BMW's own)"]],
+      "options": [["whole", "Original (whole cluster)"], ["shadow", "Shadow (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "dash"}]
     },
     {
@@ -135,7 +135,7 @@
       "label": "Eco Pro dash (Dash only)",
       "type": "choice",
       "default": "whole",
-      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["off", "Off (BMW's own)"]],
+      "options": [["whole", "Original (whole cluster)"], ["shadow", "Shadow (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "dash"}]
     },
     {
@@ -151,7 +151,7 @@
       "label": "Comfort dash (HUD + Dash)",
       "type": "choice",
       "default": "whole",
-      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["off", "Off (BMW's own)"]],
+      "options": [["whole", "Original (whole cluster)"], ["shadow", "Shadow (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "both"}]
     },
     {
@@ -167,7 +167,7 @@
       "label": "Sport dash (HUD + Dash)",
       "type": "choice",
       "default": "whole",
-      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["off", "Off (BMW's own)"]],
+      "options": [["whole", "Original (whole cluster)"], ["shadow", "Shadow (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "both"}]
     },
     {
@@ -183,7 +183,7 @@
       "label": "Eco Pro dash (HUD + Dash)",
       "type": "choice",
       "default": "whole",
-      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["off", "Off (BMW's own)"]],
+      "options": [["whole", "Original (whole cluster)"], ["shadow", "Shadow (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "both"}]
     },
     {

@@ -482,9 +482,9 @@ class EvaHud extends HudApp {
     /* ---------------- normal layers ---------------- */
 
     _create(w) {
-        if (['evaseg', 'evaframe', 'evagear', 'evacanvas', 'evasolo', 'evacorners', 'evaword', 'evacolon', 'evahex', 'evahazard', 'evaseven', 'evarings'].indexOf(w.type) < 0) { super._create(w); return; }
+        if (['evaseg', 'evaframe', 'evagear', 'evacanvas', 'evasolo', 'evacorners', 'evaword', 'evacolon', 'evahex', 'evahazard', 'evaseven', 'evarings', 'evaphoto'].indexOf(w.type) < 0) { super._create(w); return; }
         const base = Object.assign({ target: this.target, klass: w.class || 'content', z: w.z || 0, x: w.x, y: w.y, w: w.w, h: w.h }, this._layerFields());
-        const image = ['evagear', 'evacanvas', 'evaword', 'evacolon'].indexOf(w.type) >= 0;
+        const image = ['evagear', 'evacanvas', 'evaword', 'evacolon', 'evaphoto'].indexOf(w.type) >= 0;
         if (w.type === 'evaword') Object.assign(base, { sx: w.sx, sy: w.sy, opacity: 0 });
         const ref = image ? this.client.image(Object.assign({ iw: w.w, ih: w.h }, base)) : this.client.effect(Object.assign({ fs: shaders[w.type] }, base));
         if (!ref) { this.log.warn('widget "' + w.id + '": layer refused'); return; }
@@ -546,6 +546,10 @@ class EvaHud extends HudApp {
             x.canvas = this._textCanvas(w.parts);
         } else if (w.type === 'evacolon') {
             this.client.pixels(ref, null, textRaster.drawText(w.w, w.h, ':', { font: w.font, color: color(t, 'fg'), glow: t.glow, x: w.pad, offsetY: w.offsetY }));
+        } else if (w.type === 'evaphoto') {
+            const buf = hudData.bytes && hudData.bytes('photos/' + w.photo + '.rgba');
+            if (buf && buf.length === w.w * w.h * 4) this.client.pixels(ref, null, buf);
+            else this.log.warn('photo "' + w.photo + '" missing or wrong size (' + (buf ? buf.length : 'null') + ' vs ' + (w.w * w.h * 4) + ')');
         }
         this._update(x, Date.now(), true);
     }
@@ -562,7 +566,7 @@ class EvaHud extends HudApp {
         else if (type === 'evaseven') this._updateSeven(x, now, force);
         else if (type === 'evahazard') this._updateHazard(x, force);
         else if (type === 'evarings') this._updateRings(x, force);
-        else if (type !== 'evaframe' && type !== 'evahex') super._update(x, now, force);
+        else if (type !== 'evaframe' && type !== 'evahex' && type !== 'evaphoto') super._update(x, now, force);
     }
 
     /** Design B's middle: the range with its tenths, or the time with its colon beating. Blank digits show only their dim segments. */

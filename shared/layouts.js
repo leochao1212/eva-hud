@@ -33,6 +33,7 @@ const TYPES = {
     evaword: ['font'],
     evacolon: ['font'],
     evahex: ['r'],
+    evaphoto: ['photo'],
     evahazard: ['stripe'],
     evaseven: ['margin'],
     evarings: ['r0', 'step'],
