@@ -17,7 +17,15 @@ import gzip, json, os, re, shutil, sys, tarfile, tempfile, uuid
 from xml.sax.saxutils import escape
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pack_data  # noqa: E402
-from localize import unicode_resources, localize_spec, load_locale, languages, credit, credit_name
+from localize import unicode_resources, localize_spec, load_locale, languages, credit, credit_name, text
+
+# RHMI locale -> translation catalog (multi-locale "follow the head unit language" build)
+MULTILOCALE = {'zh_TW': 'zh-TW', 'zh_CN': 'zh-CN', 'ru_RU': 'ru'}
+
+def _locale_texts(strings, lang):
+    """strings (English) translated for one RHMI locale; English fallback for locales with no catalog."""
+    words = load_locale(MULTILOCALE.get(lang, 'en'))
+    return {k: (text(v, words) if isinstance(v, str) else v) for k, v in strings.items()}
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
@@ -420,6 +428,7 @@ def build(app_id, language='en'):
         'name': app_id, 'version': ver, 'description': spec.get('description', spec['title']),
         'main': 'javascript/app.js', 'private': False, 'author': spec.get('vendor', 'custom'), 'license': 'UNLICENSED',
         'engines': {'node': '>=8.7.0'},
+        'mguHmi': spec.get('mguHmi', ['ID7']),
         'oapAppSettings': {
             'maxDiskUsage': spec.get('maxDiskUsage', 20971520), 'cpuLimit': spec.get('cpuLimit', 60),
             'memoryThresholdKB': spec.get('memoryKB', 196608), 'priority': 'PRIO_LOW',
@@ -539,7 +548,7 @@ def build(app_id, language='en'):
     open(os.path.join(pr, 'uiDescriptions', 'ID7', 'application.xml'), 'w', encoding='utf-8', newline='\n').write(xml)
     json.dump(uidesc, open(os.path.join(pr, 'uiDescriptions', 'ID7', 'uiDescription.json'), 'w', encoding='utf-8', newline='\n'), indent=1)
     for lang in LANGS:
-        json.dump(strings, open(os.path.join(pr, 'variantGroups', 'Common', 'texts', lang + '.json'), 'w', encoding='utf-8', newline='\n'), ensure_ascii=False)
+        json.dump(_locale_texts(strings, lang), open(os.path.join(pr, 'variantGroups', 'Common', 'texts', lang + '.json'), 'w', encoding='utf-8', newline='\n'), ensure_ascii=False)
     make_icon(spec, os.path.join(pr, 'variantGroups', 'Common', 'images', icon))
 
     ir = os.path.join(stage, 'rhmiData')
@@ -556,7 +565,7 @@ def build(app_id, language='en'):
     open(os.path.join(ir, 'uiDescription', 'application.xml'), 'w', encoding='utf-8', newline='\n').write(xml)
     json.dump(uidesc, open(os.path.join(ir, 'uiDescription', 'uiDescription.json'), 'w', encoding='utf-8', newline='\n'), indent=1)
     for lang in LANGS:
-        json.dump(strings, open(os.path.join(ir, 'strings', lang + '.json'), 'w', encoding='utf-8', newline='\n'), ensure_ascii=False)
+        json.dump(_locale_texts(strings, lang), open(os.path.join(ir, 'strings', lang + '.json'), 'w', encoding='utf-8', newline='\n'), ensure_ascii=False)
     shutil.copy(os.path.join(pr, 'variantGroups', 'Common', 'images', icon), os.path.join(ir, 'resources', icon))
     if spec.get('startWidget'):
         info = build_start_widget(spec, app_id, os.path.join(ir, 'resources', icon), os.path.join(stage, 'rhmiDataStartWidget'),
