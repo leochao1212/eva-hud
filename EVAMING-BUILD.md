@@ -49,3 +49,6 @@ Not here and never redistributable — it is BMW's. Extract it from the head uni
 Mode **Dash only** (no windshield HUD on this car). Per drive mode pick a layout in the centre-screen
 settings, e.g. **Comfort → B (Active limit, keeps the BMW gauges)**, **Sport → D (Battle stations,
 whole cluster)**. Confirm the BMW warning lights still show before driving.
+
+## ID8 note
+- ID8 oap-sdk (extracted from M2 donor) ships rhmiLoadingEnabled/entryPointLoadingEnabled = false. Patch both to true in oap-sdk-id8/index.js or the app has no screens (exit 0, wont open). See issue #39.

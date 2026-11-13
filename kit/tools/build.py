@@ -307,7 +307,13 @@ def build_ui(spec, language='en'):
 
 
 def manifest_for(spec):
-    proxies = dict(PLATFORM_PROXIES)
+    base, services = PLATFORM_PROXIES, PLATFORM_SERVICES
+    if 'ID8' in (os.environ.get('MGU_HMI') or ''):
+        # ID8's SDK uses the v2 HMI interfaces (entrypoint2/remote2/resourcemanagement2, UseCaseContext);
+        # take the whole platform set from a known-good ID8 app's manifest. App signals still merge over it.
+        d = json.load(open(os.path.join(KIT, 'platform', 'id8-manifest-donor.json'), encoding='utf-8'))
+        base, services = d['proxies'], d['services']
+    proxies = dict(base)
     for iface, fields in spec.get('signals', {}).items():
         inst = fields.pop('_instances', '1') if isinstance(fields, dict) else '1'
         entry = {'instances': inst}
@@ -321,7 +327,7 @@ def manifest_for(spec):
         else:
             entry = '*'
         proxies[iface] = entry
-    return {'proxies': proxies, 'services': PLATFORM_SERVICES}
+    return {'proxies': proxies, 'services': services}
 
 
 def make_icon(spec, out):
