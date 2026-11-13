@@ -409,19 +409,21 @@ def build_start_widget(spec, app_id, icon_src, out, pkg_out=None):
     shutil.copy(icon_src, os.path.join(out, 'resources', icon))
     if pkg_out:
         shutil.rmtree(pkg_out, ignore_errors=True)
-        os.makedirs(os.path.join(pkg_out, 'uiDescriptions', 'ID7'))
+        whmis = os.environ['MGU_HMI'].split(',') if os.environ.get('MGU_HMI') else ['ID7']   # this build's HMI(s); ID8 skips ID7-only UI
+        wdir = whmis[0]
+        os.makedirs(os.path.join(pkg_out, 'uiDescriptions', wdir))
         os.makedirs(os.path.join(pkg_out, 'variantGroups', 'Common', 'texts'))
         os.makedirs(os.path.join(pkg_out, 'variantGroups', 'Common', 'images'))
         a = app_json['application']
         pj = {'schemaVersion': app_json['schemaVersion'], 'application': {k: a[k] for k in (
             'uuid', 'type', 'name', 'vendor', 'version', 'defaultLanguage', 'stringBundleUuid', 'resourceBundleUuid', 'entryPoints')}}
-        pj['application']['uiDescriptions'] = [{'applicationFilePath': './uiDescriptions/ID7/application.xml',
-                                                'uiDescriptionFilePath': './uiDescriptions/ID7/uiDescription.json', 'hmi': ['ID7']}]
+        pj['application']['uiDescriptions'] = [{'applicationFilePath': './uiDescriptions/' + wdir + '/application.xml',
+                                                'uiDescriptionFilePath': './uiDescriptions/' + wdir + '/uiDescription.json', 'hmi': whmis}]
         pj['application']['variantGroups'] = [{'stringsPath': './variantGroups/Common/texts',
-                                               'resourcesPath': './variantGroups/Common/images', 'hmi': ['ID7'], 'brands': ['BMW']}]
+                                               'resourcesPath': './variantGroups/Common/images', 'hmi': whmis, 'brands': ['BMW']}]
         json.dump(pj, open(os.path.join(pkg_out, 'application.json'), 'w', encoding='utf-8', newline='\n'), indent=2)
-        open(os.path.join(pkg_out, 'uiDescriptions', 'ID7', 'application.xml'), 'w', encoding='utf-8', newline='\n').write(xml)
-        json.dump(ui, open(os.path.join(pkg_out, 'uiDescriptions', 'ID7', 'uiDescription.json'), 'w', encoding='utf-8', newline='\n'), indent=1)
+        open(os.path.join(pkg_out, 'uiDescriptions', wdir, 'application.xml'), 'w', encoding='utf-8', newline='\n').write(xml)
+        json.dump(ui, open(os.path.join(pkg_out, 'uiDescriptions', wdir, 'uiDescription.json'), 'w', encoding='utf-8', newline='\n'), indent=1)
         for lang in LANGS:
             json.dump({sid_name: name}, open(os.path.join(pkg_out, 'variantGroups', 'Common', 'texts', lang + '.json'), 'w', encoding='utf-8', newline='\n'), ensure_ascii=False)
         shutil.copy(icon_src, os.path.join(pkg_out, 'variantGroups', 'Common', 'images', icon))
@@ -539,6 +541,8 @@ def build(app_id, language='en'):
             file.write(comment.encode('utf-8') + body)
     rt_spec = {k: spec.get(k) for k in ('id', 'title', 'version', 'screens', 'settings', 'config', 'startWidget')}
     rt_spec['stateIds'] = state_ids
+    # The HMI(s) this build targets, so the runtime can adapt to iDrive 8 (e.g. its focus events differ).
+    rt_spec['hmi'] = os.environ['MGU_HMI'].split(',') if os.environ.get('MGU_HMI') else spec.get('mguHmi', ['ID7'])
     json.dump(rt_spec, open(os.path.join(src, 'javascript', 'kit', 'app-spec.json'), 'w', encoding='utf-8', newline='\n'), indent=1)
     locale = {'language': language, 'strings': load_locale(language)}
     if credit(language):
@@ -564,17 +568,23 @@ def build(app_id, language='en'):
         },
     }
     pr = os.path.join(src, 'rhmiData')
-    os.makedirs(os.path.join(pr, 'uiDescriptions', 'ID7'))
+    # Which HMI(s) this build's RHMI UI is for. An ID8 head unit skips a uiDescription tagged for
+    # ID7 only, so the app's centre-screen page (its menu and settings) never loads there - the app
+    # still runs and draws (cluster-render, a separate path), but shows no settings page. Tag and
+    # place the UI for this build's HMI so ID8 loads it. (ID7 build: unchanged, ['ID7'].)
+    uihmis = os.environ['MGU_HMI'].split(',') if os.environ.get('MGU_HMI') else spec.get('mguHmi', ['ID7'])
+    uidir = uihmis[0]
+    os.makedirs(os.path.join(pr, 'uiDescriptions', uidir))
     os.makedirs(os.path.join(pr, 'variantGroups', 'Common', 'texts'))
     os.makedirs(os.path.join(pr, 'variantGroups', 'Common', 'images'))
     pj = json.loads(json.dumps(app_json))
-    pj['application']['uiDescriptions'] = [{'applicationFilePath': './uiDescriptions/ID7/application.xml',
-                                            'uiDescriptionFilePath': './uiDescriptions/ID7/uiDescription.json', 'hmi': ['ID7']}]
+    pj['application']['uiDescriptions'] = [{'applicationFilePath': './uiDescriptions/' + uidir + '/application.xml',
+                                            'uiDescriptionFilePath': './uiDescriptions/' + uidir + '/uiDescription.json', 'hmi': uihmis}]
     pj['application']['variantGroups'] = [{'stringsPath': './variantGroups/Common/texts',
-                                           'resourcesPath': './variantGroups/Common/images', 'hmi': ['ID7'], 'brands': ['BMW']}]
+                                           'resourcesPath': './variantGroups/Common/images', 'hmi': uihmis, 'brands': ['BMW']}]
     json.dump(pj, open(os.path.join(pr, 'application.json'), 'w', encoding='utf-8', newline='\n'), indent=2)
-    open(os.path.join(pr, 'uiDescriptions', 'ID7', 'application.xml'), 'w', encoding='utf-8', newline='\n').write(xml)
-    json.dump(uidesc, open(os.path.join(pr, 'uiDescriptions', 'ID7', 'uiDescription.json'), 'w', encoding='utf-8', newline='\n'), indent=1)
+    open(os.path.join(pr, 'uiDescriptions', uidir, 'application.xml'), 'w', encoding='utf-8', newline='\n').write(xml)
+    json.dump(uidesc, open(os.path.join(pr, 'uiDescriptions', uidir, 'uiDescription.json'), 'w', encoding='utf-8', newline='\n'), indent=1)
     for lang in LANGS:
         json.dump(_locale_texts(strings, lang), open(os.path.join(pr, 'variantGroups', 'Common', 'texts', lang + '.json'), 'w', encoding='utf-8', newline='\n'), ensure_ascii=False)
     make_icon(spec, os.path.join(pr, 'variantGroups', 'Common', 'images', icon))

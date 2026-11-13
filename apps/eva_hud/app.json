@@ -2,7 +2,7 @@
   "id": "eva_hud",
   "title": "EVA",
   "description": "NERV battle display on the windshield HUD and the instrument cluster: giant gear, rev bar, speed and full-screen title-card alerts",
-  "version": "0.6.7",
+  "version": "0.6.10",
   "vendor": "custom",
   "loggingId": "OAEV",
   "iconGlyph": "EVA",

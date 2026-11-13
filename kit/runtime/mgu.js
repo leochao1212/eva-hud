@@ -446,6 +446,7 @@ function wireSettings(ctx) {
         // other types: two-row buttons in the wide settings state, label above, value below
         return ui.cells(comp, 0, { Text1stRow: s.label, Text2ndRow: settings.display(s.key) });
     }));
+    ctx.refreshSettings = refresh;   // so the runtime can re-push the rows when the state opens (iDrive 8)
     schema.forEach((s) => {
         const comp = 'SET_' + s.key.toUpperCase();
         if (values(s)) {
@@ -622,12 +623,26 @@ async function runInner(impl) {
     // visibility of our states (pauses rendering when the user leaves); the HMI's settings screen too (the
     // drawn screen gives way to it: display.js)
     const tracked = (SPEC.screens || []).concat(SPEC.settings && SPEC.settings.length ? [{ name: 'SETTINGS' }] : []);
+    const ID8 = !!(SPEC.hmi && SPEC.hmi.indexOf('ID8') >= 0);
     tracked.forEach((s) => {
         const st = ui.comp(s.name);
         if (st && st.on) st.on('visible', (ev) => ui._setVisible(s.name, !!(ev && ev.visible)));
         // a popup over the screen (options, warnings, calls) takes its focus: the display hides
         // the GPU overlay meanwhile, so the popup is never covered
         if (st && st.on) st.on('focus', (ev) => ui._setFocus(s.name, !(ev && ev.focus === false)));
+    });
+    // iDrive 8: a menu's rows are pushed once at startup, before its state is opened, and the unit
+    // does not keep them (the page opens but its settings list is empty). Re-push the state's
+    // resources and the settings values whenever a menu screen becomes visible (fires via the state's
+    // 'visible' event or applicationStackChanged, both through ui._setVisible).
+    if (ID8) ui.onVisible((name, v) => {
+        if (!v || name === 'SETTINGS') return;
+        const st = ui.comp(name);
+        if (!(st && st.updateResources)) return;
+        st.updateResources()
+            .then(() => (ctx.refreshSettings ? ctx.refreshSettings() : null))
+            .then(() => log.info('re-pushed ' + name + ' rows on open (ID8)'))
+            .catch((e) => log.warn('re-push ' + name + ': ' + e));
     });
     ui.rhmi.on('applicationStackChanged', (stack) => {
         const shown = stack && Object.keys(stack).length > 0 && ('ROOT_APP' in stack);
@@ -666,6 +681,14 @@ async function runInner(impl) {
         opening = map
             .then(() => (mainState && mainState.updateResources ? mainState.updateResources().catch(() => {}) : null))
             .then(() => ui.rhmi.openEntryState(uuid))
+            .then(() => log.info('openEntryState ' + uuid + ' done'))
+            // ID8: openEntryState maps and opens the state, but the HMI keeps it behind the current
+            // context ("state MAIN covered by an HMI popup"), so the app's page never comes forward.
+            // Open the state directly as well, to request the foreground. Harmless on ID7 (re-opens
+            // the state the tile tap already foregrounded). Defensive: never break the open flow.
+            .then(() => (ui.rhmi.openState && mainState
+                ? ui.rhmi.openState(mainState).then(() => log.info('openState ' + mainName + ' done')).catch((e) => log.warn('openState ' + mainName + ': ' + e))
+                : null))
             .then(() => ui._setVisible(mainName, true))
             .catch((e) => {
                 if ((tries || 1) > 1 && /INVALID/.test(String(e && e.message ? e.message : e) + ' ' + JSON.stringify(e || {}))) again = true;
