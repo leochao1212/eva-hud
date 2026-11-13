@@ -406,9 +406,11 @@ def build_start_widget(spec, app_id, icon_src, out, pkg_out=None):
 
 
 def build(app_id, language='en'):
-    spec = json.load(open(os.path.join(APPS, app_id, 'app.json'), encoding='utf-8'))
+    src_id = app_id                                   # source folder apps/<src_id>/
+    app_id = os.environ.get('APP_ID') or app_id       # output/internal id (lets one source build a per-HMI variant)
+    spec = json.load(open(os.path.join(APPS, src_id, 'app.json'), encoding='utf-8'))
     spec = localize_spec(spec, language)
-    spec.setdefault('id', app_id)
+    spec['id'] = app_id
     ver = spec['version']
     stage = os.path.join(DIST, app_id)
     shutil.rmtree(stage, ignore_errors=True)
@@ -446,7 +448,7 @@ def build(app_id, language='en'):
     json.dump({'rhmiLoadingEnabled': True, 'entryPointLoadingEnabled': True, 'settings': {app_id: spec.get('config', {})}},
               open(os.path.join(src, 'config', 'base.json'), 'w', encoding='utf-8', newline='\n'), indent=2)
     # app code
-    adir = os.path.join(APPS, app_id)
+    adir = os.path.join(APPS, src_id)
     fetch_assets(adir, spec.get('assets', []))
     # bimmer-lab addition: app.json "shared" names .js files in the repo's shared/ folder (code more
     # than one app uses, e.g. the cluster-render drawing engine); they ship next to the app's own .js.
@@ -584,12 +586,12 @@ def build(app_id, language='en'):
 
     # --- archives ---
     os.makedirs(DIST, exist_ok=True)
-    bundle = os.path.join(DIST, f'{app_id}@{ver}.mgu')
+    bundle = os.path.join(DIST, f"{spec['id']}@{ver}.mgu")
     with gz_header_free(bundle) as gz, tarfile.open(fileobj=gz, mode='w') as tf:
         for n in ('meta.json', 'source', 'rhmiData', 'rhmiDataStartWidget', 'oapgen'):
             if os.path.exists(os.path.join(stage, n)):
                 tf.add(os.path.join(stage, n), arcname=n)
-    npm = os.path.join(DIST, f'{app_id}@{ver}.tgz')
+    npm = os.path.join(DIST, f"{spec['id']}@{ver}.tgz")
     with gz_header_free(npm) as gz, tarfile.open(fileobj=gz, mode='w') as tf:
         tf.add(src, arcname='package')
     print(f'{app_id} {ver}: {os.path.relpath(bundle, ROOT)} ({os.path.getsize(bundle) // 1024} KiB), '
