@@ -21,6 +21,15 @@ const { RenderClient, imageOp } = require('./mgu_render_client');
 
 const SET_KEYS = ['x', 'y', 'w', 'h', 'z', 'visible', 'opacity', 'rotate', 'sx', 'sy', 'px', 'py'];
 
+/** mgu-render's IMAGE pixmaps are premultiplied RGBA (PROTOCOL.md); EVA draws straight alpha. */
+function premultiply(src, dst) {
+    for (let i = 0; i < src.length; i += 4) {
+        const a = src[i + 3];
+        if (a === 255) { dst[i] = src[i]; dst[i + 1] = src[i + 1]; dst[i + 2] = src[i + 2]; dst[i + 3] = 255; }
+        else { dst[i] = (src[i] * a + 127) / 255; dst[i + 1] = (src[i + 1] * a + 127) / 255; dst[i + 2] = (src[i + 2] * a + 127) / 255; dst[i + 3] = a; }
+    }
+}
+
 class ClusterRender extends EventEmitter {
     constructor(app, socketPath, log) {
         super();
@@ -49,11 +58,13 @@ class ClusterRender extends EventEmitter {
         this.info = info;
         this.gpu.mode('layer');
         const a = (info && info.appArea && info.appArea.w) ? info.appArea : { x: 0, y: 0, w: screen.w, h: screen.h };
-        this.gpu.place({ x: a.x, y: a.y, w: a.w, h: a.h, scale: 1, ox: 0, oy: 0 });
+        // EVA draws in a 1920x720 logical space; fit it into the app area, aspect kept, centred.
+        const scale = Math.min(a.w / 1920, a.h / 720);
+        this.gpu.place({ x: a.x, y: a.y, w: a.w, h: a.h, scale: scale, ox: Math.round((a.w - 1920 * scale) / 2), oy: 0 });
         this.gpu.show(true);
         // (re)make the pixmaps; the native client resends their pixels on (re)connect itself
         this.layers.forEach((l) => { if (l.image) this.gpu.pixmap(l.pmId, l.iw, l.ih, 'rgba', 'linear'); });
-        this.layers.forEach((l) => { if (l.image && l.have) this.gpu.pixels(l.pmId, [{ x: 0, y: 0, w: l.iw, h: l.ih }], l.image); });
+        this.layers.forEach((l) => { if (l.pm && l.have) this.gpu.pixels(l.pmId, [{ x: 0, y: 0, w: l.iw, h: l.ih }], l.pm); });
         this.ready = true;
         this.emit('ready');
     }
@@ -65,7 +76,7 @@ class ClusterRender extends EventEmitter {
         const ref = this.nextRef++;
         const l = { kind, x: o.x || 0, y: o.y || 0, w: o.w, h: o.h, iw, ih, z: o.z || 0,
             visible: o.visible !== false, image: null, pmId: this.nextPm++, have: false };
-        if (kind === 'image' || kind === 'asset') l.image = Buffer.alloc(iw * ih * 4);
+        if (kind === 'image' || kind === 'asset') { l.image = Buffer.alloc(iw * ih * 4); l.pm = Buffer.alloc(iw * ih * 4); }
         this.layers.set(ref, l);
         if (this.ready && l.image) this.gpu.pixmap(l.pmId, iw, ih, 'rgba', 'linear');
         return ref;
@@ -101,7 +112,8 @@ class ClusterRender extends EventEmitter {
             }
         }
         l.have = true;
-        if (this.ready) this.gpu.pixels(l.pmId, (rects && rects.length) ? rects : [{ x: 0, y: 0, w: l.iw, h: l.ih }], l.image);
+        premultiply(l.image, l.pm);
+        if (this.ready) this.gpu.pixels(l.pmId, (rects && rects.length) ? rects : [{ x: 0, y: 0, w: l.iw, h: l.ih }], l.pm);
         return true;
     }
 
