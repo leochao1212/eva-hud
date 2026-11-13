@@ -434,8 +434,9 @@ def build(app_id, language='en'):
     spec = json.load(open(os.path.join(APPS, src_id, 'app.json'), encoding='utf-8'))
     spec = localize_spec(spec, language)
     spec['id'] = app_id
-    if 'ID8' in (os.environ.get('MGU_HMI') or ''):
-        spec.setdefault('config', {})['socketPath'] = '/run/mgu-render/render.sock'  # ID8's mgu-render socket
+    # ID8 draws on the instrument cluster / HUD through cluster-render, same as ID7 (socket
+    # /dev/shm/cluster-render/render.sock from app.json config) and the same upstream client; only
+    # the cluster's 'panel' whole-takeover is unavailable there, so ID8 uses the centre 'map' target.
     ver = spec['version']
     stage = os.path.join(DIST, app_id)
     shutil.rmtree(stage, ignore_errors=True)

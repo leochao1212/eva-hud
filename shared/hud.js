@@ -83,6 +83,18 @@ const TICK_MS = 50;              // 20 Hz: shift bar and gauges
 const TEXT_MS = 200;             // text re-draws at most 5 times a second (what BMW's own readouts do)
 const DEFAULT_LOCATION = { lat: 35.2271, lon: -80.8431 }; // Charlotte, NC: for the Auto theme's sunset
 const TARGET_SIZES = { hud: [800, 480], panel: [1920, 720] };
+
+// cluster-render's hello gives the live slots as "name:WxH,name:WxH" (ID7: map 1088x480, panel 1920x720,
+// hud 800x480; ID8: map 874x749, hud 353x203, widget/popup 2240x896). Parse it so each layout is checked
+// against the real size of the target it draws on, not a guess — ID7 and ID8 then both come out right.
+function parseTargets(s) {
+    const out = {};
+    String(s || '').split(',').forEach((t) => {
+        const m = /^\s*([a-z]+)\s*:\s*(\d+)x(\d+)\s*$/.exec(t);
+        if (m) out[m[1]] = [parseInt(m[2], 10), parseInt(m[3], 10)];
+    });
+    return out;
+}
 const MODE_KEY = { comfort: 'inComfort', sport: 'inSport', eco: 'inEco' };
 const MODE_NAME = { comfort: 'Comfort', sport: 'Sport', eco: 'Eco Pro' };
 const FRESH_MS = 3000;           // a boost reading older than this is not used
@@ -454,6 +466,18 @@ class HudApp {
 
     /* ---------------- layers ---------------- */
 
+    _targetSize(name) {
+        const live = parseTargets(this.client && this.client.targets);
+        return live[name] || TARGET_SIZES[name] || TARGET_SIZES.hud;
+    }
+
+    /** Keep this.size and the Layouts validator matched to the current target's real size (from cluster-render). */
+    _applyTargetSize() {
+        const sz = this._targetSize(this.target);
+        this.size = sz;
+        if (this.layouts) this.layouts.size = sz;
+    }
+
     _rebuild() {
         this._guard('rebuild', () => this._rebuildInner());
         this._status();
@@ -461,6 +485,7 @@ class HudApp {
 
     _rebuildInner() {
         if (!this.client.ready) return; // the 'ready' handler calls us again
+        this._applyTargetSize();        // this.target may have changed (dash panel<->map); match the validator to it
         this.widgets.forEach((x) => this.client.drop(x.ref));
         this.widgets.clear();
         this.layerStates.clear();

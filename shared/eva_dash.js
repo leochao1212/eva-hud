@@ -27,7 +27,7 @@
 const EvaHud = require('./eva_hud');
 
 const POPUP_SLOT = 0x202;
-const CENTRE_DESIGNS = ['a', 'b', 'c1', 'c2', 'e1', 'e2'];
+const CENTRE_DESIGNS = ['a', 'b', 'c1', 'c2', 'e1', 'e2', 'sq'];   // sq: the ID8 map-target square (dash_sq)
 const WHOLE_DESIGNS = ['d', 'c3', 'e3'];     // besides the original, 'eva'
 const TEXT_MS = 250;     // its text rectangles are about four times the HUD's, and share one upload budget with it
 
