@@ -77,6 +77,24 @@ PLATFORM_PROXIES = {
         "broadcasts": ["ShutdownEvents", "SessionStateChanged"], "instances": "NSMConsumer",
         "methods": ["LifecycleRequestComplete", "RegisterShutdownClient", "UnRegisterShutdownClient"]},
 }
+# ID8's oap-sdk talks to the v2 HMI interfaces. For an ID8 build these replace the v1 hmi.* proxies
+# (and PrivateEntryPoint) in the set above; everything else stays, as it already installs on ID8.
+HMI_ID8 = {
+    "de.bmw.infotainment.hmi.entrypoint2.EntryPoint2": "*",
+    "de.bmw.infotainment.hmi.entrypoint2.EntryPointManager2": "*",
+    "de.bmw.infotainment.hmi.remote2.RemoteHmi2": "*",
+    "de.bmw.infotainment.hmi.remote2.RemoteHmiApplication2": "*",
+    "de.bmw.infotainment.hmi.resourcemanagement2.ResourceBundle2": "*",
+    "de.bmw.infotainment.hmi.resourcemanagement2.ResourceManager2": "*",
+    "de.bmw.infotainment.hmi.resourcemanagement2.StringBundle2": "*",
+    "de.bmw.infotainment.hmi.usecasemanagement.UseCaseContext": {
+        "broadcasts": ["notify"], "instances": "*", "methods": ["setObservedContextKeys"]},
+    "de.bmw.infotainment.hmi.usecasemanagement.UseCaseInstance": "*",
+    "de.bmw.infotainment.hmi.usecasemanagement.UseCaseProvider": "*",
+    "de.bmw.infotainment.hmi.usecasemanagement.UseCaseRegistry": {
+        "attributes": {"useCaseIds": "r"}, "broadcasts": ["registryUpdate"], "instances": "*", "methods": ["getProvider"]},
+    "de.bmw.infotainment.telematic.oap.PrivateEntryPoint2": {"instances": ["${userId}"], "methods": ["genericMethod"]},
+}
 PLATFORM_SERVICES = {
     "de.bmw.infotainment.telematic.oap.AppStatus": {"instances": ["${userId}"]},
     "de.bmw.infotainment.telematic.oap.TriggersControl": {"instances": ["${userId}"]},
@@ -309,10 +327,9 @@ def build_ui(spec, language='en'):
 def manifest_for(spec):
     base, services = PLATFORM_PROXIES, PLATFORM_SERVICES
     if 'ID8' in (os.environ.get('MGU_HMI') or ''):
-        # ID8's SDK uses the v2 HMI interfaces (entrypoint2/remote2/resourcemanagement2, UseCaseContext);
-        # take the whole platform set from a known-good ID8 app's manifest. App signals still merge over it.
-        d = json.load(open(os.path.join(KIT, 'platform', 'id8-manifest-donor.json'), encoding='utf-8'))
-        base, services = d['proxies'], d['services']
+        base = {k: v for k, v in PLATFORM_PROXIES.items()
+                if '.hmi.' not in k and not k.endswith('.oap.PrivateEntryPoint')}
+        base.update(HMI_ID8)
     proxies = dict(base)
     for iface, fields in spec.get('signals', {}).items():
         inst = fields.pop('_instances', '1') if isinstance(fields, dict) else '1'
@@ -417,6 +434,8 @@ def build(app_id, language='en'):
     spec = json.load(open(os.path.join(APPS, src_id, 'app.json'), encoding='utf-8'))
     spec = localize_spec(spec, language)
     spec['id'] = app_id
+    if 'ID8' in (os.environ.get('MGU_HMI') or ''):
+        spec.setdefault('config', {})['socketPath'] = '/run/mgu-render/render.sock'  # ID8's mgu-render socket
     ver = spec['version']
     stage = os.path.join(DIST, app_id)
     shutil.rmtree(stage, ignore_errors=True)

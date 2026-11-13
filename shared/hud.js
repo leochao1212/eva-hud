@@ -69,6 +69,7 @@
  */
 const fs = require('fs');
 const { ClusterRender, DEFAULT_PATH } = require('./cluster_render_client.js');
+const { ClusterRender: MguRenderClusterRender } = require('./mgu_render_adapter.js');
 const Layouts = require('./layouts');
 const { THEMES, M_STRIPE, LIGHTS, VERDICT, color } = require('./hud_themes');
 const ShiftScore = require('./shift_score');
@@ -122,7 +123,8 @@ class HudApp {
         this.location = this.config.location || DEFAULT_LOCATION;
         // HUD_CLUSTER_SOCKET: the Mac bench's fake cluster-render; never set on the car
         this.socketPath = process.env.HUD_CLUSTER_SOCKET || this.config.socketPath || DEFAULT_PATH;
-        this.client = new ClusterRender(this.view.clientName || ctx.spec.id, this.socketPath);
+        const CR = /mgu-render/.test(this.socketPath) ? MguRenderClusterRender : ClusterRender;   // iDrive 8's native renderer
+        this.client = new CR(this.view.clientName || ctx.spec.id, this.socketPath, this.log);
         const target = this.view.target || this.config.target;
         this.target = TARGET_SIZES[target] ? target : 'hud';
         this.size = TARGET_SIZES[this.target];
