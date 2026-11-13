@@ -2,7 +2,7 @@
   "id": "eva_hud",
   "title": "EVA",
   "description": "NERV battle display on the windshield HUD and the instrument cluster: giant gear, rev bar, speed and full-screen title-card alerts",
-  "version": "0.6.4",
+  "version": "0.6.7",
   "vendor": "custom",
   "loggingId": "OAEV",
   "iconGlyph": "EVA",
@@ -97,7 +97,7 @@
       "label": "Comfort HUD (HUD only)",
       "type": "choice",
       "default": "comfort",
-      "options": [["comfort", "Comfort"], ["sport", "Sport"], ["eco", "Eco Pro"], ["off", "Off (BMW's own)"]],
+      "options": [["comfort", "Comfort"], ["sport", "Sport"], ["eco", "Eco Pro"], ["sqhud", "SQ: ID8 HUD"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "hud"}]
     },
     {
@@ -105,7 +105,7 @@
       "label": "Sport HUD (HUD only)",
       "type": "choice",
       "default": "sport",
-      "options": [["comfort", "Comfort"], ["sport", "Sport"], ["eco", "Eco Pro"], ["off", "Off (BMW's own)"]],
+      "options": [["comfort", "Comfort"], ["sport", "Sport"], ["eco", "Eco Pro"], ["sqhud", "SQ: ID8 HUD"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "hud"}]
     },
     {
@@ -113,7 +113,7 @@
       "label": "Eco Pro HUD (HUD only)",
       "type": "choice",
       "default": "eco",
-      "options": [["comfort", "Comfort"], ["sport", "Sport"], ["eco", "Eco Pro"], ["off", "Off (BMW's own)"]],
+      "options": [["comfort", "Comfort"], ["sport", "Sport"], ["eco", "Eco Pro"], ["sqhud", "SQ: ID8 HUD"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "hud"}]
     },
     {
@@ -145,7 +145,7 @@
       "label": "Comfort HUD (HUD + Dash)",
       "type": "choice",
       "default": "eva",
-      "options": [["eva", "Battle display"], ["comfort", "Comfort"], ["sport", "Sport"], ["eco", "Eco Pro"], ["off", "Off (BMW's own)"]],
+      "options": [["eva", "Battle display"], ["comfort", "Comfort"], ["sport", "Sport"], ["eco", "Eco Pro"], ["sqhud", "SQ: ID8 HUD"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "both"}]
     },
     {
@@ -161,7 +161,7 @@
       "label": "Sport HUD (HUD + Dash)",
       "type": "choice",
       "default": "eva",
-      "options": [["eva", "Battle display"], ["comfort", "Comfort"], ["sport", "Sport"], ["eco", "Eco Pro"], ["off", "Off (BMW's own)"]],
+      "options": [["eva", "Battle display"], ["comfort", "Comfort"], ["sport", "Sport"], ["eco", "Eco Pro"], ["sqhud", "SQ: ID8 HUD"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "both"}]
     },
     {
@@ -177,7 +177,7 @@
       "label": "Eco Pro HUD (HUD + Dash)",
       "type": "choice",
       "default": "eva",
-      "options": [["eva", "Battle display"], ["comfort", "Comfort"], ["sport", "Sport"], ["eco", "Eco Pro"], ["off", "Off (BMW's own)"]],
+      "options": [["eva", "Battle display"], ["comfort", "Comfort"], ["sport", "Sport"], ["eco", "Eco Pro"], ["sqhud", "SQ: ID8 HUD"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "both"}]
     },
     {

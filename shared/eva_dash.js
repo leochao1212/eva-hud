@@ -48,7 +48,8 @@ class EvaDash extends EvaHud {
     }
     _layoutFile(name) {
         if (name === 'off') return name;
-        return name === 'alert' && this._isCentre() ? 'dash_centre_alert' : 'dash_' + name;
+        if (name === 'alert' && this._isCentre()) return this._layoutName() === 'sq' ? 'dash_sq_alert' : 'dash_centre_alert';
+        return 'dash_' + name;
     }
     _layoutLabel(name) { return name === 'eva' ? 'EVA' : name.indexOf('shadow') === 0 ? 'Shadow' : 'Design ' + name.toUpperCase(); }
     _isCentre() { return CENTRE_DESIGNS.indexOf(this._layoutName()) >= 0; }

@@ -110,7 +110,7 @@ const RINGS = 7;                // design E2's, the same as its shader
 const RINGS_HOT_FROM = 5;
 const SHOWS_BURN = ['e1', 'e2', 'e3'];   // the dash's designs with the fuel use on them
 // HUD Only's layout for each drive mode. Sport is the battle display; Comfort and Eco Pro are the everyday ones.
-const HUD_ONLY = { sport: 'hud_only_sport', comfort: 'hud_only_comfort', eco: 'hud_only_eco' };
+const HUD_ONLY = { sport: 'hud_only_sport', comfort: 'hud_only_comfort', eco: 'hud_only_eco', sqhud: 'hud_sq' };   // sqhud: the small ID8 hud-target layout
 const RANGE_NONE = 4095;        // what the car sends with no range to give
 const DEMO_RANGE = 412;
 // The range may never be notified, so it is read every READ_MS, and holds until the reads stop: a parked car says
