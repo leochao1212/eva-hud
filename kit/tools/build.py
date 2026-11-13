@@ -32,7 +32,7 @@ ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
 KIT = os.path.join(ROOT, 'kit')
 APPS = os.path.join(ROOT, 'apps')
 DIST = os.path.join(ROOT, 'dist')
-SDK = os.path.join(ROOT, 'oap-sdk')
+SDK = os.environ.get('OAP_SDK') or os.path.join(ROOT, 'oap-sdk')
 NS = uuid.UUID('6b1d3a52-8f0e-4c4b-9a77-0d0c4d4e5f10')
 
 LANGS = ['ar_AE', 'cs_CZ', 'da_DK', 'de_DE', 'el_GR', 'en_GB', 'en_US', 'es_ES', 'fi_FI', 'fr_FR', 'he_IL',
@@ -428,7 +428,7 @@ def build(app_id, language='en'):
         'name': app_id, 'version': ver, 'description': spec.get('description', spec['title']),
         'main': 'javascript/app.js', 'private': False, 'author': spec.get('vendor', 'custom'), 'license': 'UNLICENSED',
         'engines': {'node': '>=8.7.0'},
-        'mguHmi': spec.get('mguHmi', ['ID7']),
+        'mguHmi': (os.environ['MGU_HMI'].split(',') if os.environ.get('MGU_HMI') else spec.get('mguHmi', ['ID7'])),
         'oapAppSettings': {
             'maxDiskUsage': spec.get('maxDiskUsage', 20971520), 'cpuLimit': spec.get('cpuLimit', 60),
             'memoryThresholdKB': spec.get('memoryKB', 196608), 'priority': 'PRIO_LOW',
