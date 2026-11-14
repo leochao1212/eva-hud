@@ -134,7 +134,7 @@ class HudApp {
         this.config = (ctx.spec && ctx.spec.config) || {};
         this.location = this.config.location || DEFAULT_LOCATION;
         // HUD_CLUSTER_SOCKET: the Mac bench's fake cluster-render; never set on the car
-        this.socketPath = process.env.HUD_CLUSTER_SOCKET || this.config.socketPath || DEFAULT_PATH;
+        this.socketPath = process.env.HUD_CLUSTER_SOCKET || this.view.socketPath || this.config.socketPath || DEFAULT_PATH;
         const CR = /mgu-render/.test(this.socketPath) ? MguRenderClusterRender : ClusterRender;   // iDrive 8's native renderer
         this.client = new CR(this.view.clientName || ctx.spec.id, this.socketPath, this.log);
         const target = this.view.target || this.config.target;

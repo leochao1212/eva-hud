@@ -2,7 +2,7 @@
   "id": "eva_hud",
   "title": "EVA",
   "description": "NERV battle display on the windshield HUD and the instrument cluster: giant gear, rev bar, speed and full-screen title-card alerts",
-  "version": "0.6.10",
+  "version": "0.7.0",
   "vendor": "custom",
   "loggingId": "OAEV",
   "iconGlyph": "EVA",
@@ -30,7 +30,8 @@
     "eva_hud.js",
     "eva_magi.js",
     "eva_demo.js",
-    "eva_dash.js"
+    "eva_dash.js",
+    "eva_centre.js"
   ],
   "signals": {
     "de.bmw.infotainment.vehicle.CDS": {
@@ -387,6 +388,16 @@
       "default": "off",
       "options": [
         ["off", "Off"],
+        ["on", "On"]
+      ]
+    },
+    {
+      "key": "centre",
+      "label": "中控駕駛艙 Centre cockpit",
+      "type": "choice",
+      "default": "off",
+      "options": [
+        ["off", "Off (BMW's own)"],
         ["on", "On"]
       ]
     }

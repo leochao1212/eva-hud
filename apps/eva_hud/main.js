@@ -11,7 +11,7 @@ const EvaHud = require('./eva_hud');
 
 mgu.run({
     start(ctx) {
-        let hud, dash = null;
+        let hud, dash = null, centre = null;
         try {
             hud = new EvaHud(ctx);
         } catch (e) {
@@ -28,14 +28,24 @@ mgu.run({
             dash = null;
             ctx.log.error('dash failed to start, the HUD carries on: ' + (e && e.stack || e));
         }
-        const show = () => ctx.ui.text('STATUS', [hud.lastStatus, dash && dash.lastStatus].filter(Boolean).join('  /  '));
+        try {
+            const EvaCentre = require('./eva_centre');
+            centre = new EvaCentre(ctx, hud);
+        } catch (e) {
+            centre = null;
+            ctx.log.error('centre screen failed to start, the rest carries on: ' + (e && e.stack || e));
+        }
+        const show = () => ctx.ui.text('STATUS', [hud.lastStatus, dash && dash.lastStatus, centre && centre.lastStatus].filter(Boolean).join('  /  '));
         hud.onStatus(show);
         if (dash) dash.onStatus(show);
+        if (centre) centre.onStatus(show);
         hud.start();
         if (dash) dash.start();
+        if (centre) centre.start();
         process.on('exit', () => {
             try { hud.stop(); } catch (e) { /* exiting anyway */ }
             try { if (dash) dash.stop(); } catch (e) { /* exiting anyway */ }
+            try { if (centre) centre.stop(); } catch (e) { /* exiting anyway */ }
         });
     },
 });
