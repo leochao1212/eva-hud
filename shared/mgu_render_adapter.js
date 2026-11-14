@@ -31,11 +31,20 @@ function premultiply(src, dst) {
 }
 
 class ClusterRender extends EventEmitter {
-    constructor(app, socketPath, log) {
+    constructor(app, socketPath, log, size, fullScreen) {
         super();
         this.app = app;
+        this.log = log;
         this.backend = 'mgu-render';
         this.targets = 'panel';
+        // the logical space the layout is drawn in (hud.js TARGET_SIZES): panel 1920x720, centre 1280x480.
+        this.designW = (size && size[0]) || 1920;
+        this.designH = (size && size[1]) || 720;
+        // fullScreen: place over the whole screen (centre cockpit), not just the HMI's app area, so the
+        // RHMI menu/scrollbar frame is covered. pl holds the place transform for touch<->design mapping.
+        this.fullScreen = !!fullScreen;
+        this.pl = null;
+        this.claimDesign = [];       // touch areas in design px; mapped to screen px on claim/reconnect
         this.ready = false;
         this.front = false;
         this.layers = new Map();     // ref -> { kind, x, y, w, h, iw, ih, z, visible, image, pmId, have }
@@ -48,6 +57,23 @@ class ClusterRender extends EventEmitter {
         this.gpu.on('tick', () => this._frame());
         this.gpu.on('state', (s) => { this.front = s.front; this.onScreen = s.onScreen; });
         this.gpu.on('close', () => { if (this.ready) { this.ready = false; this.emit('disconnected'); } });
+        this.gpu.on('touch', (phase, x, y) => this._onTouch(phase, x, y));   // re-emitted in design px
+    }
+
+    /** Touch areas, in DESIGN px: mapped to screen px and claimed, re-mapped on every (re)connect. */
+    claim(rects) {
+        this.claimDesign = (rects || []).slice(0, 16);
+        if (this.ready) this.gpu.claim(this._mapClaims());
+    }
+    _mapClaims() {
+        const pl = this.pl || { x: 0, y: 0, ox: 0, oy: 0, scale: 1 };
+        return this.claimDesign.map((r) => ({ x: pl.x + pl.ox + r.x * pl.scale, y: pl.y + pl.oy + r.y * pl.scale, w: r.w * pl.scale, h: r.h * pl.scale }));
+    }
+    /** mgu-render sends touch in screen px; map back to the design space the view hit-tests in. */
+    _onTouch(phase, x, y) {
+        const pl = this.pl;
+        if (!pl) return;
+        this.emit('touch', phase, (x - pl.x - pl.ox) / pl.scale, (y - pl.y - pl.oy) / pl.scale);
     }
 
     connect() { this.gpu.connect(); }
@@ -57,10 +83,17 @@ class ClusterRender extends EventEmitter {
         this.screen = screen;
         this.info = info;
         this.gpu.mode('layer');
-        const a = (info && info.appArea && info.appArea.w) ? info.appArea : { x: 0, y: 0, w: screen.w, h: screen.h };
-        // EVA draws in a 1920x720 logical space; fit it into the app area, aspect kept, centred.
-        const scale = Math.min(a.w / 1920, a.h / 720);
-        this.gpu.place({ x: a.x, y: a.y, w: a.w, h: a.h, scale: scale, ox: Math.round((a.w - 1920 * scale) / 2), oy: 0 });
+        // fullScreen covers the whole screen (over the RHMI frame); otherwise fit into the HMI's app area.
+        const full = this.fullScreen ? { x: 0, y: 0, w: screen.w, h: screen.h } : null;
+        const a = full || ((info && info.appArea && info.appArea.w) ? info.appArea : { x: 0, y: 0, w: screen.w, h: screen.h });
+        // EVA draws in a designW x designH logical space; fit it into that area, aspect kept, centred.
+        const dw = this.designW, dh = this.designH;
+        const scale = Math.min(a.w / dw, a.h / dh);
+        const ox = Math.round((a.w - dw * scale) / 2), oy = Math.round((a.h - dh * scale) / 2);
+        this.pl = { x: a.x, y: a.y, scale: scale, ox: ox, oy: oy };
+        this.gpu.place({ x: a.x, y: a.y, w: a.w, h: a.h, scale: scale, ox: ox, oy: oy });
+        if (this.claimDesign.length) this.gpu.claim(this._mapClaims());   // touch areas survive a reconnect
+        try { if (this.log && this.log.info) this.log.info('mgu-render place: screen ' + screen.w + 'x' + screen.h + (full ? ' FULLSCREEN' : ' appArea ' + a.w + 'x' + a.h) + ' design ' + dw + 'x' + dh + ' scale ' + scale.toFixed(3) + ' touch=' + !!(info && info.touch)); } catch (e) {}
         this.gpu.show(true);
         // (re)make the pixmaps; the native client resends their pixels on (re)connect itself
         this.layers.forEach((l) => { if (l.image) this.gpu.pixmap(l.pmId, l.iw, l.ih, 'rgba', 'linear'); });

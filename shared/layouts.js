@@ -37,6 +37,8 @@ const TYPES = {
     evahazard: ['stripe'],
     evaseven: ['margin'],
     evarings: ['r0', 'step'],
+    uigear: [],      // centre cockpit touch gear (eva_centre paints it)
+    uipanel: [],     // centre cockpit touch settings panel (eva_centre paints it)
 };
 const CLASSES = ['ambient', 'content', 'overlay', 'alert'];
 

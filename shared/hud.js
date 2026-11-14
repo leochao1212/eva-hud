@@ -82,7 +82,7 @@ const BOOST_SCALE = { factor: 0.01, offset: 0, invalid: 255 }; // see header com
 const TICK_MS = 50;              // 20 Hz: shift bar and gauges
 const TEXT_MS = 200;             // text re-draws at most 5 times a second (what BMW's own readouts do)
 const DEFAULT_LOCATION = { lat: 35.2271, lon: -80.8431 }; // Charlotte, NC: for the Auto theme's sunset
-const TARGET_SIZES = { hud: [800, 480], panel: [1920, 720] };
+const TARGET_SIZES = { hud: [800, 480], panel: [1920, 720], centre: [1280, 480] };
 
 // cluster-render's hello gives the live slots as "name:WxH,name:WxH" (ID7: map 1088x480, panel 1920x720,
 // hud 800x480; ID8: map 874x749, hud 353x203, widget/popup 2240x896). Parse it so each layout is checked
@@ -135,11 +135,11 @@ class HudApp {
         this.location = this.config.location || DEFAULT_LOCATION;
         // HUD_CLUSTER_SOCKET: the Mac bench's fake cluster-render; never set on the car
         this.socketPath = process.env.HUD_CLUSTER_SOCKET || this.view.socketPath || this.config.socketPath || DEFAULT_PATH;
-        const CR = /mgu-render/.test(this.socketPath) ? MguRenderClusterRender : ClusterRender;   // iDrive 8's native renderer
-        this.client = new CR(this.view.clientName || ctx.spec.id, this.socketPath, this.log);
         const target = this.view.target || this.config.target;
         this.target = TARGET_SIZES[target] ? target : 'hud';
         this.size = TARGET_SIZES[this.target];
+        const CR = /mgu-render/.test(this.socketPath) ? MguRenderClusterRender : ClusterRender;   // iDrive 8's native renderer
+        this.client = new CR(this.view.clientName || ctx.spec.id, this.socketPath, this.log, this.size);   // centre fits the HMI app area (not full-screen: covering the RHMI frame makes the HMI fight back and flicker)
         this.label = this.view.statusName || this.config.statusName || 'HUD';
         this.layoutTheme = null;         // the active layout's own theme, if it has one
         this.layouts = new Layouts(ctx.dataDir, this.log, this.size);

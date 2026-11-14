@@ -44,7 +44,12 @@ CLUSTER_FONTS = [
     ('head', 'BarlowCondensed-SemiBold.ttf', 24, UPPER + DIGITS + '/°%>·.: -'),
     ('scale', 'BarlowCondensed-SemiBold.ttf', 30, DIGITS),
 ]
-FONTS = {'idrive_hud_widgets': HUD_FONTS, 'cluster_themes': CLUSTER_FONTS}
+# eva_hud centre-cockpit touch UI: one Latin font for the settings overlay (labels + value codes,
+# all uppercase so no CJK atlas is needed). Baked into apps/eva_hud/hud/fonts/ alongside e_num/e_speed.
+EVA_FONTS = [
+    ('e_ui', 'BarlowCondensed-SemiBold.ttf', 32, UPPER + DIGITS + ' :./-+%·'),
+]
+FONTS = {'idrive_hud_widgets': HUD_FONTS, 'cluster_themes': CLUSTER_FONTS, 'eva_hud': EVA_FONTS}
 PAD = 2
 ATLAS_W = 1024
 
