@@ -776,6 +776,263 @@ def build_sqhud(fonts_dir, refuse):
     return {'schemaVersion': 2, 'name': 'EVA hud_sq', 'theme': 'eva', '_about': about, 'widgets': widgets}
 
 
+# The ID8 map designs that follow the ID7 HUD's three drive-mode screens (hud_only_sport / comfort / eco), at the map
+# target's own size. BMW's own graphics sit along the bottom SQ_BOTTOM px and the hood's top edge above SQ_TOP, so
+# everything keeps to SQ_BOX. Each stays within 5 layers (cluster-render's 8 for the dash connection, 3 kept for an alert).
+SQ_TOP, SQ_BOTTOM = 70, 84
+SQ_BOX = (40, SQ_TOP, SQUARE_SIZE[0] - 40, SQUARE_SIZE[1] - SQ_BOTTOM)     # l, t, r, b
+SQ_LAYERS = 5
+SQ_GEAR_WORDS = chars('予備出撃待命', *[s for s, _ in WORDS.values()])
+
+
+def _sq_check(name, widgets, parts, refuse):
+    # rules never change, so rules may cross each other; a text part is redrawn in its box, so nothing may sit under it
+    kind = {p['id']: p['type'] for p in parts}
+    bad = [c for c in clashes(parts) if any(kind[i] != 'rule' for i in c.split('/'))]
+    if bad:
+        refuse('%s: parts overlap: %r' % (name, bad))
+    if len(widgets) > SQ_LAYERS:
+        refuse('%s: %d layers, the dash keeps %d for normal use' % (name, len(widgets), SQ_LAYERS))
+    W, H = SQUARE_SIZE
+    for p in parts:
+        if p['x'] < 0 or p['y'] < 0 or p['x'] + p['w'] > W or p['y'] + p['h'] > H - SQ_BOTTOM + 8:
+            refuse('%s: part %s runs out of the map slot: %r' % (name, p['id'], (p['x'], p['y'], p['w'], p['h'])))
+
+
+def _sq_ground(b):
+    return {'id': 'bg', 'type': 'evahex', 'x': 0, 'y': 0, 'w': SQUARE_SIZE[0], 'h': b, 'r': 26, 'class': 'ambient', 'z': 0, 'keepInAlert': True}
+
+
+def _sq_logo(src, w, x, y, color, **more):
+    with Image.open(LOGO_MASK) as m:
+        h = round(w * m.height / m.width)
+    out = {'id': 'logo', 'type': 'logo', 'src': 'logos/%s.json' % src, 'color': color, 'x': round(x), 'y': round(y), 'w': w, 'h': h}
+    out.update(more)
+    return out
+
+
+def build_sq_sport(fonts_dir, refuse):
+    """Design 'sqs' on the ID8 map target: ID7's HUD Only - SPORT (hud_only_sport) as a square. The status line and the
+    rev bar across the top, the numbers on the left (boost, oil / water, torque / power), the gear in its frame on the
+    right, our own big speed under the numbers with the NERV mark beside it, and the pedal under the gear.
+    The gear's frame is drawn as canvas rules, not an evaframe layer, to stay within the dash's 5 layers."""
+    W, H = SQUARE_SIZE
+    L, T, R, B = SQ_BOX
+    pre = 'sqs_'
+    cell, base, glyphs = bake_table(fonts_dir, pre, [
+        ('line', MAT_SUB, 22, chars(PLAIN, *STATUS_LINES)),
+        ('label', MAT_SUB, 22, chars(PLAIN, *LABELS)),
+        ('unit', SEMI, 24, chars(PLAIN, 'NMHP', 'SYNC')),
+        ('num84', BOLD, 84, DIGITS + '.-'),
+        ('num64', BOLD, 64, DIGITS + '.-%'),
+        ('speed', BOLD, 160, DIGITS + '-'),
+        ('gear', MAT_SUB, 230, DIGITS + '-'),
+        ('gearjp', MAT_SUB, 90, SQ_GEAR_WORDS),
+        ('gearrev', BOLD, 64, chars('REVERSE')),
+    ])
+    text, label, rule = part_makers(cell, pre)
+
+    rev_y, rev_h = T + cell['line'] + 6, 40
+    body_y = rev_y + rev_h + 18
+    fw = 320
+    fx = R - fw
+    lw = fx - 24 - L
+    half = (lw - 16) // 2
+    second = L + half + 16
+
+    def number(parts, id_, title, value, unit, top, left, width, font, vw):
+        parts.append(label(id_ + '_l', title, top, left=left, width=width))
+        vtop = top + cell['label'] + 2
+        parts.append(text(id_ + '_v', value, font, vtop, left=left + 1, width=vw, pad=1))
+        if unit:
+            parts.append(text(id_ + '_u', unit, 'unit', vtop + cell[font] - cell['unit'], left=left + vw + 6, width=width - vw - 6, color='dim'))
+        return vtop + cell[font] + 2
+
+    parts = [text('status', '{{statusline}}', 'line', T, left=L, width=R - L, hotWhen='now')]
+    t = number(parts, 'boost', 'BOOST  増圧', '{{boost}}', '{{u:boost}}', body_y, L, lw, 'num84', 130) + 12
+    t2 = number(parts, 'oil', 'OIL  油温', '{{oil}}', '{{u:temp}}', t, L, half, 'num64', 110)
+    number(parts, 'water', 'WATER  水温', '{{coolant}}', '{{u:temp}}', t, second, half, 'num64', 110)
+    t3 = number(parts, 'torque', 'TRQ  トルク', '{{torque}}', '{{u:torque}}', t2 + 12, L, half, 'num64', 120)
+    number(parts, 'power', 'POWER  出力', '{{power}}', '{{u:power}}', t2 + 12, second, half, 'num64', 120)
+
+    # the gear's frame: a dim box with bright corners, as evaframe draws it, and its four captions
+    fh = t3 - body_y
+    arm, wt = 22, 3
+    parts += [
+        rule('f_t', fx, body_y, fw, 1, 'rule'), rule('f_b', fx, body_y + fh - 1, fw, 1, 'rule'),
+        rule('f_l', fx, body_y + 1, 1, fh - 2, 'rule'), rule('f_r', fx + fw - 1, body_y + 1, 1, fh - 2, 'rule'),
+    ]
+    for cid, (cx_, cy_, dx, dy) in enumerate(((fx, body_y, 1, 1), (fx + fw, body_y, -1, 1), (fx, body_y + fh, 1, -1), (fx + fw, body_y + fh, -1, -1))):
+        hx = cx_ if dx > 0 else cx_ - arm
+        vy = cy_ if dy > 0 else cy_ - arm
+        parts.append(rule('c%dh' % cid, hx, cy_ if dy > 0 else cy_ - wt, arm, wt, 'fg'))
+        parts.append(rule('c%dv' % cid, cx_ if dx > 0 else cx_ - wt, vy + (wt if dy > 0 else 0), wt, arm - wt, 'fg'))
+    cap_w = fw - 2 * arm - 4
+    parts += [
+        text('cap1', '{{gearcap}}', 'unit', body_y + 8, left=fx + arm + 2, width=cap_w, color='dim'),
+        label('cap2', '{{gearcapjp}}', body_y + 8 + cell['unit'] + 2, left=fx + 12, width=cap_w),
+        label('cap3', '変速機 UNIT-01', body_y + fh - 8 - cell['label'], left=fx + 12, width=176),
+        text('cap4', 'SYNC {{sync}}%', 'unit', body_y + fh - 8 - cell['unit'], right=fx + fw - 10, width=fw - 22 - 176 - 8, color='dim'),
+    ]
+    g_top = body_y + 8 + cell['unit'] + cell['label'] + 6
+    g_bot = body_y + fh - 8 - cell['label'] - 4
+    if g_bot - g_top < cell['gear'] * 0.9:
+        refuse('sqs: the gear (%d px) does not fit its frame (%d px)' % (cell['gear'], g_bot - g_top))
+    gear = {'id': 'gear', 'type': 'evagear', 'x': fx + 6, 'y': g_top, 'w': fw - 12, 'h': g_bot - g_top, 'class': 'overlay', 'z': 8, 'fontPrefix': pre}
+
+    # under the numbers: our own speed (on ID7 BMW drew it on the glass), the NERV mark beside it
+    low = t3 + 14
+    parts.append(rule('spd_r', L, low, lw, 1, 'rule'))
+    parts.append(label('spd_l', 'SPEED  速度', low + 10, left=L, width=200))
+    sp_top = low + 10 + cell['label'] + 6
+    sp_w = 3 * glyphs['speed']['0']['advance'] + 8
+    parts.append(text('speed', '{{speed}}', 'speed', sp_top, left=L, width=sp_w, pad=6))
+    parts.append(text('speed_u', '{{u:speed}}', 'unit', sp_top + cell['speed'] - cell['unit'], left=L + sp_w + 14, width=80, color='dim'))
+    logo_x = L + sp_w + 110
+    logo = _sq_logo('nerv', min(170, L + lw - logo_x), logo_x, low + 12, 'hot',
+                    flicker={'color': 'amber', 'gapMs': [20000, 45000], 'flashes': 3, 'phaseMs': 250})
+    if logo['y'] + logo['h'] > B:
+        refuse('sqs: the NERV mark runs under BMW\'s bottom row')
+    parts.append(logo)
+
+    # under the gear: the pedal
+    bar_h = 16
+    p_l = low + 10
+    bar_y = p_l + cell['label'] + 8
+    parts.append(label('throttle_l', 'PEDAL  油門', p_l, left=fx, width=fw))
+    parts.append(text('pedal_v', '{{pedal}}%', 'num64', bar_y + bar_h + 10, left=fx, width=fw))
+    inst = {'id': 'inst', 'type': 'evasolo', 'x': fx, 'y': bar_y, 'w': fw, 'h': bar_h, 'class': 'content', 'z': 3, 'bar': [0, 0, fw, bar_h]}
+
+    bottom = max(p['y'] + p['h'] for p in parts)
+    if bottom > B:
+        refuse('sqs: content ends at %d, BMW\'s bottom row starts at %d' % (bottom, B))
+    rev = {'id': 'rev', 'type': 'evaseg', 'x': L, 'y': rev_y, 'w': R - L, 'h': rev_h, 'segments': 28, 'class': 'content', 'z': 5}
+    widgets = [_sq_ground(B), rev, inst, gear, canvas('text', parts, 'overlay', 10)]
+    _sq_check('sqs', widgets, canvas_parts({'widgets': widgets}), refuse)
+    print('EVA sqs fitted to %dx%d: frame %dx%d, content ends at %d' % (W, H, fw, fh, bottom))
+    return {'schemaVersion': 2, 'name': 'EVA square - SPORT', 'theme': 'eva',
+            '_about': 'Generated by tools/eva_layout.py build_sq_sport for the ID8 map target %dx%d. Re-run that rather than editing this.' % (W, H),
+            'widgets': widgets}
+
+
+def _sq_everyday(fonts_dir, refuse, pre, extra):
+    """What Comfort and Eco share on the ID8 map: fonts, the corners, the title card's big word for P / R / N on the
+    right, the small mark at the top right, and our own speed with the gear at the lower left."""
+    L, T, R, B = SQ_BOX
+    cell, base, glyphs = bake_table(fonts_dir, pre, [
+        ('small', MAT_SUB, 30, chars(PLAIN, *EVERYDAY)),
+        ('sub', MAT_SUB, 22, chars(*[sub for _, sub in WORDS.values()])),
+        ('word', MAT_SUB, 96, chars(*[s for s, _ in WORDS.values()])),
+        ('unit', SEMI, 30, chars(PLAIN, 'L/100KM')),
+        ('speed', BOLD, 160, DIGITS + '-'),
+    ] + extra)
+    text, label, rule = part_makers(cell, pre)
+
+    def at(id_, s, font, baseline_y, **kw):
+        return text(id_, s, font, baseline_y - base[font], **kw)
+
+    def width(s, font):
+        return sum(glyphs[font][c]['advance'] for c in s)
+
+    ins = 12
+    corners = {'id': 'corners', 'type': 'evacorners', 'x': L, 'y': T, 'w': R - L, 'h': B - T, 'class': 'content', 'z': 1,
+               'arm': 34, 'weight': 3, 'open': 6, 'lowerLeft': B - T - ins}
+    # the big word, scaled about its centre like ID7's, in the right half between the top and the bottom rows
+    pad, sx, sy = 8, 0.86, 1.5
+    iw = max(width(s, 'word') for s, _ in WORDS.values()) + 2 * pad
+    ih = cell['word'] + 2 * pad
+    word_cx, word_cy = R - 30 - iw * sx / 2, T + 372
+    word = {'id': 'word', 'type': 'evaword', 'x': round(word_cx - iw / 2), 'y': round(word_cy - ih / 2), 'w': iw, 'h': ih,
+            'font': pre + 'word', 'pad': pad, 'sx': sx, 'sy': sy, 'class': 'overlay', 'z': 8}
+    word_top = word_cy - ih * sy / 2
+    parts = [
+        _sq_logo('nerv_small', 70, R - 70 - 28, T + 26, 'dim'),
+        text('wordsub', '{{wordsub}}', 'sub', word_top - cell['sub'] - 6, right=R - 30,
+             width=max(width(sub, 'sub') for _, sub in WORDS.values()) + 4, color='soft', warnWhen='reverse'),
+    ]
+    # lower left: the speed and its unit (BMW's ID8 cluster shows the gear itself, as ID7's Comfort / Eco left it to BMW)
+    sp_w = 3 * glyphs['speed']['0']['advance'] + 8
+    sp_base = B - 36
+    parts.append(at('speed', '{{speed}}', 'speed', sp_base, left=L + 30, width=sp_w, pad=6))
+    ux = L + 30 + sp_w + 10
+    parts.append(at('speed_u', '{{u:speed}}', 'unit', sp_base, left=ux, width=80, color='dim'))
+    return cell, base, glyphs, text, label, rule, at, width, corners, word, parts, ux + 80
+
+
+def build_sq_comfort(fonts_dir, refuse):
+    """Design 'sqc' on the ID8 map target: ID7's HUD Only - COMFORT. The place name, the big clock with its breathing
+    colon and the range on the left, the line from the menu at the lower right, the speed and gear at the lower left."""
+    W, H = SQUARE_SIZE
+    L, T, R, B = SQ_BOX
+    pre = 'sqc_'
+    cell, base, glyphs, text, label, rule, at, width, corners, word, parts, low_right = _sq_everyday(fonts_dir, refuse, pre, [
+        ('place', MAT_SUB, 44, chars(PLACE)),
+        ('time', MAT_SUB, 150, DIGITS + ':-'),
+        ('num30', SEMI, 34, DIGITS + '- KM'),
+        ('motto', MAT_SUB, 40, chars(*[line for m in MOTTOS.values() for line in m])),
+    ])
+    left = L + 30
+    parts.append(at('place', PLACE, 'place', T + 84, left=left, width=width(PLACE, 'place'), color='soft'))
+    pad = 4
+    hours_w, colon_w = width('00', 'time'), width(':', 'time')
+    colon_pad = max(2, min(8, (colon_w - 2) // 2))
+    clock_base = T + 84 + 20 + base['time']
+    hh = at('hh', '{{hh}}', 'time', clock_base, left=left - 2, width=hours_w + colon_pad, pad=pad)
+    mm = at('mm', '{{mm}}', 'time', clock_base, left=left - 2 + hours_w + colon_w, width=hours_w, pad=colon_pad)
+    colon = {'id': 'colon', 'type': 'evacolon', 'x': left - 2 + hours_w - colon_pad, 'y': hh['y'], 'w': colon_w + 2 * colon_pad, 'h': hh['h'],
+             'font': pre + 'time', 'pad': colon_pad, 'offsetY': hh['offsetY'], 'class': 'overlay', 'z': 11}
+    parts += [hh, mm, at('range', '{{range}} KM', 'num30', clock_base + 56, left=left, width=200, color='soft')]
+    m_w = max(width(m[i], 'motto') for m in MOTTOS.values() for i in range(2))
+    m_left = max(low_right + 30, R - 30 - m_w)
+    for i in range(2):
+        parts.append(at('motto%d' % (i + 1), '{{motto%d}}' % (i + 1), 'motto', B - 36 - (1 - i) * (cell['motto'] + 10), left=m_left, width=m_w, color='soft'))
+    if m_left + m_w > R:
+        refuse('sqc: the motto (%d px) does not fit beside the speed' % m_w)
+    widgets = [_sq_ground(B), corners, word, canvas('text', parts, 'overlay', 10), colon]
+    _sq_check('sqc', widgets, canvas_parts({'widgets': widgets}), refuse)
+    print('EVA sqc fitted to %dx%d: clock base %d, motto %d px' % (W, H, clock_base, m_w))
+    return {'schemaVersion': 2, 'name': 'EVA square - COMFORT', 'theme': 'eva_calm',
+            '_about': 'Generated by tools/eva_layout.py build_sq_comfort for the ID8 map target %dx%d. Re-run that rather than editing this.' % (W, H),
+            'widgets': widgets}
+
+
+def build_sq_eco(fonts_dir, refuse):
+    """Design 'sqe' on the ID8 map target: ID7's HUD Only - ECO PRO. 節電 / 活動限界 over the big range and the time on
+    the left, the fuel use at the lower right, the speed and gear at the lower left."""
+    W, H = SQUARE_SIZE
+    L, T, R, B = SQ_BOX
+    pre = 'sqe_'
+    cell, base, glyphs, text, label, rule, at, width, corners, word, parts, low_right = _sq_everyday(fonts_dir, refuse, pre, [
+        ('range', BOLD, 200, DIGITS + '-'),
+        ('num40', SEMI, 40, DIGITS + ':-'),
+        ('burn', BOLD, 96, DIGITS + '.-'),
+    ])
+    left = L + 30
+    range_w = max(width(d * 3, 'range') for d in DIGITS) + 4
+    range_base = T + 110 + base['range']
+    parts += [
+        at('save', '節電', 'small', T + 50, left=left, width=80, color='soft'),
+        at('limit', '活動限界', 'small', T + 90, left=left, width=140, color='dim'),
+        at('range', '{{range}}', 'range', range_base, left=left - 2, width=range_w, pad=3),
+        at('range_u', 'KM', 'unit', range_base, left=left + range_w + 6, width=50, color='soft'),
+        at('time', '{{time}}', 'num40', range_base + 60, left=left, width=120, color='soft'),
+    ]
+    b_left = max(low_right + 40, R - 30 - 260)
+    b_base = B - 36
+    burn_w = width('00.0', 'burn') + 4
+    parts += [
+        at('burn_l', '燃料消費', 'small', b_base - cell['burn'] - 10, left=b_left, width=140, color='soft'),
+        at('burn', '{{burn}}', 'burn', b_base, left=b_left, width=burn_w, pad=2),
+        at('burn_u', 'L/100KM', 'unit', b_base, left=b_left + burn_w + 6, width=R - 20 - (b_left + burn_w + 6), color='dim'),
+    ]
+    widgets = [_sq_ground(B), corners, word, canvas('text', parts, 'overlay', 10)]
+    _sq_check('sqe', widgets, canvas_parts({'widgets': widgets}), refuse)
+    print('EVA sqe fitted to %dx%d: range base %d, fuel use at x %d' % (W, H, range_base, b_left))
+    return {'schemaVersion': 2, 'name': 'EVA square - ECO PRO', 'theme': 'eva_eco',
+            '_about': 'Generated by tools/eva_layout.py build_sq_eco for the ID8 map target %dx%d. Re-run that rather than editing this.' % (W, H),
+            'widgets': widgets}
+
+
 def centre_ground(**more):
     return dict({'id': 'bg', 'type': 'evahex', 'x': 0, 'y': 0, 'w': MAP_SIZE[0], 'h': MAP_SIZE[1], 'r': 26, 'class': 'ambient', 'z': 0, 'keepInAlert': True}, **more)
 

@@ -27,7 +27,7 @@
 const EvaHud = require('./eva_hud');
 
 const POPUP_SLOT = 0x202;
-const CENTRE_DESIGNS = ['a', 'b', 'c1', 'c2', 'e1', 'e2', 'sq'];   // sq: the ID8 map-target square (dash_sq)
+const CENTRE_DESIGNS = ['a', 'b', 'c1', 'c2', 'e1', 'e2', 'sq', 'sqs', 'sqc', 'sqe'];   // sq*: the ID8 map-target squares (dash_sq*), sqs/sqc/sqe = ID7 HUD's Sport/Comfort/Eco
 const WHOLE_DESIGNS = ['d', 'c3', 'e3'];     // besides the original, 'eva'
 const TEXT_MS = 250;     // its text rectangles are about four times the HUD's, and share one upload budget with it
 
@@ -48,7 +48,7 @@ class EvaDash extends EvaHud {
     }
     _layoutFile(name) {
         if (name === 'off') return name;
-        if (name === 'alert' && this._isCentre()) return this._layoutName() === 'sq' ? 'dash_sq_alert' : 'dash_centre_alert';
+        if (name === 'alert' && this._isCentre()) return this._layoutName().indexOf('sq') === 0 ? 'dash_sq_alert' : 'dash_centre_alert';
         return 'dash_' + name;
     }
     _layoutLabel(name) { return name === 'eva' ? 'EVA' : name.indexOf('shadow') === 0 ? 'Shadow' : 'Design ' + name.toUpperCase(); }

@@ -430,12 +430,27 @@ def build_start_widget(spec, app_id, icon_src, out, pkg_out=None):
     return {'component': comp, 'layout': ui['containers']['500']['components'][str(WIDGET_COMPONENT_ID)]['cells']['Widget']['value']}
 
 
+def apply_hmi_overrides(spec):
+    """app.json "hmiOverrides": {"ID8": {"settings": {"<key>": {"default": ..., "reset": n}}}} patches the settings of
+    a build for that HMI (MGU_HMI), so one source can default differently per car. With "reset" the kit moves a car's
+    saved value to the new default once (kit/runtime/mgu.js Settings)."""
+    hmis = os.environ['MGU_HMI'].split(',') if os.environ.get('MGU_HMI') else spec.get('mguHmi', ['ID7'])
+    for hmi in hmis:
+        for key, patch in (spec.get('hmiOverrides', {}).get(hmi, {}).get('settings') or {}).items():
+            item = next((x for x in spec.get('settings', []) if x.get('key') == key), None)
+            if item is None:
+                raise SystemExit('hmiOverrides.%s: no setting "%s"' % (hmi, key))
+            item.update(patch)
+    spec.pop('hmiOverrides', None)
+
+
 def build(app_id, language='en'):
     src_id = app_id                                   # source folder apps/<src_id>/
     app_id = os.environ.get('APP_ID') or app_id       # output/internal id (lets one source build a per-HMI variant)
     spec = json.load(open(os.path.join(APPS, src_id, 'app.json'), encoding='utf-8'))
     spec = localize_spec(spec, language)
     spec['id'] = app_id
+    apply_hmi_overrides(spec)
     # ID8 draws on the instrument cluster / HUD through cluster-render, same as ID7 (socket
     # /dev/shm/cluster-render/render.sock from app.json config) and the same upstream client; only
     # the cluster's 'panel' whole-takeover is unavailable there, so ID8 uses the centre 'map' target.

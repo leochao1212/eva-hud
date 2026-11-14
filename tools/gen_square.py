@@ -20,6 +20,9 @@ LAYOUTS = [
     ('dash_sq', E.build_square),
     ('dash_sq_alert', E.build_square_alert),
     ('hud_sq', E.build_sqhud),
+    ('dash_sqs', E.build_sq_sport),
+    ('dash_sqc', E.build_sq_comfort),
+    ('dash_sqe', E.build_sq_eco),
 ]
 
 
