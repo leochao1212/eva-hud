@@ -4,8 +4,10 @@
  * (not the cluster's cluster-render). It reuses the HUD's car data, engine unit and alert rules (like
  * eva_dash) and loads hud/layouts/dash_cockpit.json: the EVA-01 hologram, live water/oil/boost and the
  * MAGI verdict. It points at /run/mgu-render/render.sock, so hud.js uses the mgu-render adapter
- * (shared/mgu_render_adapter.js) in FULL-SCREEN mode (target 'centre'): the cockpit covers the whole
- * centre screen, over the app's RHMI menu/scrollbar frame.
+ * (shared/mgu_render_adapter.js) with the 'centre' target: the cockpit is drawn in a 1280x480 design
+ * space scaled into the HMI's app area (fullScreen stays off - covering the RHMI frame makes the HMI
+ * fight back and flicker, 0.8.2). The 0.8.6 log line "mgu-render place: screen ... appArea ... scale"
+ * is the first thing to read when the centre screen stays empty.
  *
  * Touch settings (replacing the native RHMI settings page): the adapter claims touch areas and emits
  * 'touch' in design px. A gear top-right opens a settings panel drawn here; tapping a row cycles that
@@ -45,7 +47,7 @@ function blit(dst, DW, DH, src, SW, SH, dx, dy) {
 class EvaCentre extends EvaHud {
     constructor(ctx, primary) {
         super(ctx, { primary, target: 'centre', statusName: 'CENTRE', clientName: ctx.spec.id + '_centre',
-            socketPath: MGU_SOCKET, textRateMs: TEXT_MS });
+            socketPath: MGU_SOCKET, textRateMs: TEXT_MS, fullScreen: false });
         this.primary = primary;
         this.readings = primary.readings;
         this.settingsOpen = false;

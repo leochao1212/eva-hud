@@ -44,6 +44,9 @@ class ClusterRender extends EventEmitter {
         // RHMI menu/scrollbar frame is covered. pl holds the place transform for touch<->design mapping.
         this.fullScreen = !!fullScreen;
         this.pl = null;
+        this.showTimer = null;       // a re-show after the renderer closed us (the foreground gate)
+        this.shownAt = 0; this.showRetry = 0;
+        this.errReason = null;       // the last mgu-render error, for the status line
         this.claimDesign = [];       // touch areas in design px; mapped to screen px on claim/reconnect
         this.ready = false;
         this.front = false;
@@ -58,6 +61,39 @@ class ClusterRender extends EventEmitter {
         this.gpu.on('state', (s) => { this.front = s.front; this.onScreen = s.onScreen; });
         this.gpu.on('close', () => { if (this.ready) { this.ready = false; this.emit('disconnected'); } });
         this.gpu.on('touch', (phase, x, y) => this._onTouch(phase, x, y));   // re-emitted in design px
+        // the renderer took us off the screen: claim it back instead of going black for good
+        this.gpu.on('closed', () => this._onClosed());
+        // mgu-render's only complaint channel; without this the screen just stays empty with no clue why
+        this.gpu.on('renderer-error', (m) => this._onRendererError(m));
+    }
+
+    /** The renderer closed us (the foreground gate). Show again, but stop if it keeps doing it. */
+    _onClosed() {
+        this.logInfo('closed by the renderer, showing again');
+        const now = Date.now();
+        this.showRetry = (now - this.shownAt < 1000) ? this.showRetry + 1 : 0;
+        this.shownAt = now;
+        if (this.showRetry > 5) {
+            try { this.log && this.log.warn && this.log.warn('mgu-render: the renderer keeps closing us (5x); not showing again'); } catch (e) {}
+            return;
+        }
+        clearTimeout(this.showTimer);
+        this.showTimer = setTimeout(() => {
+            this.showTimer = null;
+            if (!this.ready) return;
+            try { this.gpu.show(true); this.logInfo('show again'); } catch (e) {}
+        }, 500);
+        if (this.showTimer.unref) this.showTimer.unref();
+    }
+
+    /** A refusal from mgu-render: the native client already logs it; surface it so the status line names the reason. */
+    _onRendererError(m) {
+        this.errReason = String(m);
+        this.emit('refused', 'mgu-render', 0, this.errReason);
+    }
+
+    logInfo(m) {
+        try { this.log && this.log.info && this.log.info('mgu-render: ' + m); } catch (e) {}
     }
 
     /** Touch areas, in DESIGN px: mapped to screen px and claimed, re-mapped on every (re)connect. */

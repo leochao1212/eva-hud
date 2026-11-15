@@ -139,7 +139,10 @@ class HudApp {
         this.target = TARGET_SIZES[target] ? target : 'hud';
         this.size = TARGET_SIZES[this.target];
         const CR = /mgu-render/.test(this.socketPath) ? MguRenderClusterRender : ClusterRender;   // iDrive 8's native renderer
-        this.client = new CR(this.view.clientName || ctx.spec.id, this.socketPath, this.log, this.size);   // centre fits the HMI app area (not full-screen: covering the RHMI frame makes the HMI fight back and flicker)
+        // fullScreen (5th argument, the mgu-render adapter only): cover the whole screen, over the RHMI frame. Off for the
+        // centre cockpit - covering the RHMI frame makes the HMI fight back and flicker (0.8.2) - so it fits the app area.
+        this.client = new CR(this.view.clientName || ctx.spec.id, this.socketPath, this.log, this.size, !!this.view.fullScreen);
+
         this.label = this.view.statusName || this.config.statusName || 'HUD';
         this.layoutTheme = null;         // the active layout's own theme, if it has one
         this.layouts = new Layouts(ctx.dataDir, this.log, this.size);

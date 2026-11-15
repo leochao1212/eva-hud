@@ -146,7 +146,7 @@ node bench/server.js eva_hud        # Mac 上的模拟器，打开 http://localh
 模拟器第一次运行时会生成一个假的 `oap-sdk/`，它不能装车。测试也需要这个文件夹，所以先运行一次模拟器，然后：
 
 ```sh
-for t in flicker layout popups alerts canvas diag magi demo dash; do node bench/test/eva_${t}_test.js | tail -1; done
+for t in flicker layout popups alerts canvas diag magi demo dash centre_client; do node bench/test/eva_${t}_test.js | tail -1; done
 ```
 
 装车要用从 BMW app 提取的真实 `oap-sdk`，它不能再分发，所以不在这里。步骤见 [apps/eva_hud/README.md](apps/eva_hud/README.md#装上车)。**应用运行时更新会带动车机重启，开车时不要装。**
