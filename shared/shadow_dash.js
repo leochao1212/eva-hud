@@ -8,14 +8,11 @@
  * no full-screen alerts: a saved EVA "shadow" design is not this app's problem.
  *
  * The three photos and the layouts live in this app's hud/ (tools/make_photos.py, tools/shadow_layout.py).
- * Instruments sit in the dark area on the right of each photo. The fade, the diagonal stripe,
- * the segment outlines, the icons and km/h are baked into the photo. This class draws what changes:
- * the speed (the e_rpm atlas drawn 1:1 inside a padded box; the preview atlas is already italic),
- * the lit rpm segments, the gear badge, and the range, coolant and time.
- * Number glyphs are the same atlases as EVA (e_rpm, e_num, b_gear, e3_time).
+ * Instruments sit in the dark area on the right of each photo, in EVA's type: the label, the speed
+ * atlas, the unit, the segmented rev bar, the gear (evagear) and the small readouts. The photo
+ * holds the fade and the slanted accent. Glyphs are EVA's atlases, drawn at their own size.
  */
 const EvaHud = require('./eva_hud');
-const textRaster = require('./hud_text');
 
 const PHOTOS = ['sport', 'comfort', 'eco'];
 const PROFILE_KEY = { comfort: 'Comfort', sport: 'Sport', eco: 'Eco' };
@@ -77,125 +74,36 @@ class ShadowDash extends EvaHud {
 
     _popupSlot() { return POPUP_SLOT; }
 
-    /* The hero, the segments and the gear badge are not EVA text parts. */
+    /* The rev segments are painted here. Everything else is an ordinary EVA part or evagear. */
     _partLook(p, now) {
         if (p.type === 'segs') {
             const rpm = this._raw('rpm');
-            const n = p.count || 16;
+            const n = p.count || 28;
             const lit = typeof rpm === 'number' && isFinite(rpm) ? Math.max(0, Math.min(n, Math.ceil(rpm / (8000 / n)))) : 0;
             return 'segs|' + lit;
         }
-        if (p.type === 'badge') return 'badge|' + this._token('gear');
         return EvaHud.prototype._partLook.call(this, p, now);
     }
 
     _partPixels(p, look) {
         if (p.type === 'segs') return this._paintSegs(p, Number(look.split('|')[1]) || 0);
-        if (p.type === 'badge') return this._paintBadge(p, look.split('|').slice(1).join('|'));
-        if (p.hero) return this._paintHero(p, look);
         return EvaHud.prototype._partPixels.call(this, p, look);
     }
 
-    /**
-     * The hero is the atlas at its own size, inset so the glow fades out before the quad edge.
-     * No upscale and no shear: an italic look comes from the atlas. The preview bakes
-     * DejaVu Bold at cell height 248; on the car, e_rpm is whatever atlas was linked.
-     */
-    _paintHero(p, look) {
-        const cut = look.indexOf('|');
-        const color = (cut < 0 ? look : look.slice(0, cut)).split(',').map(Number);
-        const text = look.slice(cut + 1);
-        const pad = p.pad || 36;
-        return textRaster.drawText(p.w, p.h, text, {
-            font: p.font, color: color, align: 'left', glow: 0.1, x: pad, offsetY: pad,
-        });
-    }
-
+    /** Hard-edged segments, like EVA's rev bar. Red only once a segment in the 7-8k zone is lit. */
     _paintSegs(p, lit) {
         const buf = Buffer.alloc(p.w * p.h * 4);
         const accent = this.theme.accent || this.theme.fg;
         const hot = this.theme.hot || [255, 42, 42, 255];
+        const rest = this.theme.track || accent;
         const quads = p.quads || [];
         for (let i = 0; i < quads.length; i++) {
-            if (i >= lit) continue;
-            const red = i >= (p.redFrom || 14);
-            const c = red ? hot : accent;
-            if (red) fillQuad(buf, p.w, p.h, grow(quads[i], 2), [c[0], c[1], c[2], 48]);
-            fillQuad(buf, p.w, p.h, quads[i], [c[0], c[1], c[2], 255]);
+            const on = i < lit;
+            const c = on && i >= (p.redFrom || 24) ? hot : on ? accent : rest;
+            fillQuad(buf, p.w, p.h, quads[i], [c[0], c[1], c[2], on ? 255 : (c[3] == null ? 46 : c[3])]);
         }
         return buf;
     }
-
-    _paintBadge(p, gear) {
-        const buf = Buffer.alloc(p.w * p.h * 4);
-        const accent = this.theme.accent || [255, 92, 0, 255];
-        const slant = p.slant || 14;
-        const quad = [[slant, 2], [p.w - 2, 2], [p.w - 2 - slant, p.h - 3], [0, p.h - 3]];
-        fillQuad(buf, p.w, p.h, quad, [accent[0], accent[1], accent[2], 255]);
-        const ink = this.theme.rule && this.theme.name === 'Shadow Comfort' ? [16, 28, 48, 255] : [22, 12, 8, 255];
-        const font = textRaster.loadFont(p.font);
-        const cell = font.metrics.cellHeight || p.h;
-        const tw = Math.max(1, Math.ceil(textRaster.measure(gear || '-', p.font, 0)) + 2);
-        const small = textRaster.drawText(tw, cell, gear || '-', { font: p.font, color: ink, align: 'center' });
-        let bw = tw, bh = cell, src = small;
-        if (bh > p.h - 12 || bw > p.w - slant - 12) {
-            const s = Math.min((p.h - 12) / bh, (p.w - slant - 12) / bw);
-            bw = Math.max(1, Math.round(tw * s));
-            bh = Math.max(1, Math.round(cell * s));
-            src = scaleInto(small, tw, cell, bw, bh);
-        }
-        blit(buf, p.w, p.h, src, bw, bh, Math.round((p.w - slant) / 2 + slant * 0.25 - bw / 2), Math.round((p.h - bh) / 2));
-        return buf;
-    }
-}
-
-/** Bilinear scale of a straight-alpha RGBA buffer. */
-function scaleInto(src, sw, sh, dw, dh) {
-    const dst = Buffer.alloc(dw * dh * 4);
-    for (let y = 0; y < dh; y++) {
-        const sy = (y + 0.5) * sh / dh - 0.5;
-        const y0 = Math.max(0, Math.floor(sy));
-        const y1 = Math.min(sh - 1, y0 + 1);
-        const fy = sy - y0;
-        for (let x = 0; x < dw; x++) {
-            const sx = (x + 0.5) * sw / dw - 0.5;
-            const x0 = Math.max(0, Math.floor(sx));
-            const x1 = Math.min(sw - 1, x0 + 1);
-            const fx = sx - x0;
-            const o = (y * dw + x) * 4;
-            for (let c = 0; c < 4; c++) {
-                const a = src[(y0 * sw + x0) * 4 + c];
-                const b = src[(y0 * sw + x1) * 4 + c];
-                const d = src[(y1 * sw + x0) * 4 + c];
-                const e = src[(y1 * sw + x1) * 4 + c];
-                dst[o + c] = (a * (1 - fx) + b * fx) * (1 - fy) + (d * (1 - fx) + e * fx) * fy;
-            }
-        }
-    }
-    return dst;
-}
-
-/** Top of the buffer leans right by `k` pixels per pixel of height. */
-function shear(src, w, h, k) {
-    if (!k) return src;
-    const dst = Buffer.alloc(w * h * 4);
-    for (let y = 0; y < h; y++) {
-        const shift = (h - 1 - y) * k;
-        for (let x = 0; x < w; x++) {
-            const sx = x - shift;
-            const x0 = Math.floor(sx);
-            const x1 = x0 + 1;
-            const fx = sx - x0;
-            if (x1 < 0 || x0 >= w) continue;
-            const o = (y * w + x) * 4;
-            for (let c = 0; c < 4; c++) {
-                const a = x0 >= 0 ? src[(y * w + x0) * 4 + c] : 0;
-                const b = x1 < w ? src[(y * w + x1) * 4 + c] : 0;
-                dst[o + c] = a * (1 - fx) + b * fx;
-            }
-        }
-    }
-    return dst;
 }
 
 function fillQuad(buf, w, h, quad, color) {
@@ -224,36 +132,6 @@ function fillQuad(buf, w, h, quad, color) {
             buf[o + 1] = color[1] * a + buf[o + 1] * ia;
             buf[o + 2] = color[2] * a + buf[o + 2] * ia;
             buf[o + 3] = Math.min(255, buf[o + 3] + color[3] * (1 - buf[o + 3] / 255));
-        }
-    }
-}
-
-function grow(quad, px) {
-    const cx = quad.reduce((s, p) => s + p[0], 0) / quad.length;
-    const cy = quad.reduce((s, p) => s + p[1], 0) / quad.length;
-    return quad.map((p) => {
-        const dx = p[0] - cx, dy = p[1] - cy;
-        const len = Math.hypot(dx, dy) || 1;
-        return [p[0] + dx / len * px, p[1] + dy / len * px];
-    });
-}
-
-function blit(dst, dw, dh, src, sw, sh, dx, dy) {
-    for (let y = 0; y < sh; y++) {
-        const yy = dy + y;
-        if (yy < 0 || yy >= dh) continue;
-        for (let x = 0; x < sw; x++) {
-            const xx = dx + x;
-            if (xx < 0 || xx >= dw) continue;
-            const s = (y * sw + x) * 4;
-            const a = src[s + 3] / 255;
-            if (a <= 0) continue;
-            const o = (yy * dw + xx) * 4;
-            const ia = 1 - a;
-            dst[o] = src[s] * a + dst[o] * ia;
-            dst[o + 1] = src[s + 1] * a + dst[o + 1] * ia;
-            dst[o + 2] = src[s + 2] * a + dst[o + 2] * ia;
-            dst[o + 3] = Math.min(255, src[s + 3] + dst[o + 3] * ia);
         }
     }
 }

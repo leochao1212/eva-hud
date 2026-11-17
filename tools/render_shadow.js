@@ -4,8 +4,7 @@
  * the real layout, the real text raster and the demo-style drive values. The rpm bar is an
  * effect shader on the car; here it is painted from the same uniforms the app sends.
  *
- * Preview fonts are DejaVu (open licence), baked into the gitignored hud/fonts and packed
- * by the build. They are not a substitute for the owner's EVA atlases on the car.
+ * The glyphs are the EVA atlases linked from apps/eva_hud/hud/fonts (gitignored).
  *
  *   node tools/render_shadow.js [outDir]
  */

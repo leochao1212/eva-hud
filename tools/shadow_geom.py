@@ -1,158 +1,265 @@
 """Geometry for the Shadow cluster.
 
 Photo is 1920x640. Live widgets end at y=636 (bottom 84px is BMW's row).
-The fade, slash, segment outlines, icons, km/h and the rpm label are baked.
-The app draws the speed, lit segments, gear badge and the readout numbers.
+The photo holds the fade to black and the slanted accent. The app draws the
+column in EVA's own type: a label, the speed atlas, the unit, a segmented
+rev bar, the rpm figure, a bracketed gear, and the small readouts.
 
-The speed part is padded so its glow dies inside the quad, and the slash sits
-entirely to the left of that quad.
+Every atlas is drawn at its own cell size. The speed box is padded so the
+glow dies inside the quad.
 """
 
 PHOTO_W, PHOTO_H = 1920, 640
 PANEL_H = 720
 CLEAR_Y = PANEL_H - 84  # 636
+RIGHT = 1896
 
-# Rightmost artwork in the band where the slash sits (y 30-180), measured on the
-# 1920x640 crop. The slash must stay to the right of this.
+# Rightmost artwork in the band where the slash sits (y 30-180).
 ART_RIGHT = {'sport': 1172, 'comfort': 1248, 'eco': 1452}
 FADE = {'sport': 1060, 'comfort': 1180, 'eco': 1360}
-# Photo rows from here down fade to pure black; y=636-720 is that same black.
 BOTTOM_FADE_Y = 576
 
 ACCENT = {
-    'sport': (255, 92, 0),
-    'comfort': (240, 112, 0),
+    'sport': (255, 106, 0),
+    'comfort': (255, 106, 0),
     'eco': (255, 106, 0),
 }
-NAVY = (18, 36, 72)
-MUTED = (255, 255, 255)
+NAVY = (20, 40, 75)
 
-SEGMENTS = 16
-RED_FROM = 14
-SLANT = 18
-HERO_PAD = 32          # glow must reach 0 inside this inset
-# The visible digits are HERO_GLYPH tall. The part is taller by the padding.
-HERO_GLYPH = 248
-HERO_H = HERO_GLYPH + 2 * HERO_PAD
-ICON = 32              # matches the footer number cap-height
-ICON_GAP = 12
-ITEM_GAP = 48
+SEGMENTS = 28
+RED_FROM = 24          # 7000-8000 of an 8000 rpm bar
+
+# Measured from the EVA atlases. cell is the glyph height; ink is the advance of "118".
+SPEED = {
+    'sq_speed': {'cell': 179, 'size': 240, 'ink': 348},
+    'sqs_speed': {'cell': 119, 'size': 160, 'ink': 231},
+}
+LABEL_H = 29           # d_label
+UNIT_H = 27            # d_unit
+RPM_CELL = {'d_num42': 73, 'sqs_num64': 52}
+NUM_CELL = 52          # sqs_num64
+TIME_CELL = 54         # time70
+GEAR_CELL = 181        # sq_gear
+GEAR_W = 216           # one digit plus the glow margin; a P/R word still fits
 
 
-def _quads(x, y, w, h, slant, gap):
-    pitch = w / float(SEGMENTS)
+def _pad(size):
+    # two passes of the text blur (radius = size/24) plus a few pixels
+    return max(2, int(round(size / 24.0))) * 2 + 6
+
+
+def _rects(w, h, n, gap):
+    slot = (w + gap) / float(n)
     out = []
-    for i in range(SEGMENTS):
-        x0 = x + i * pitch
-        bl, br = x0 + gap * 0.5, x0 + pitch - gap * 0.5
-        out.append(((bl + slant, y), (br + slant, y), (br, y + h), (bl, y + h)))
+    for i in range(n):
+        x0 = i * slot
+        x1 = x0 + slot - gap
+        out.append(((x0, 0), (x1, 0), (x1, h), (x0, h)))
     return out
 
 
+def _text(pid, text, font, x, y, w, h, **more):
+    one = {
+        'id': pid, 'type': 'text', 'text': text, 'font': font,
+        'x': x, 'y': y, 'w': w, 'h': h, 'align': 'left', 'color': 'fg',
+    }
+    one.update(more)
+    return one
+
+
+def _rule(pid, x, y, w, h, color):
+    return {'id': pid, 'type': 'rule', 'x': x, 'y': y, 'w': w, 'h': h, 'color': color}
+
+
+def _brackets(x, y, w, h):
+    """EVA's gear frame: a hairline and heavy corners. The hairline is inset so it misses the corners."""
+    arm, thick, inset = 28, 3, 7
+    parts = [
+        _rule('f_t', x + inset, y + inset, w - 2 * inset, 1, 'rule'),
+        _rule('f_b', x + inset, y + h - inset - 1, w - 2 * inset, 1, 'rule'),
+        _rule('f_l', x + inset, y + inset + 1, 1, h - 2 * inset - 2, 'rule'),
+        _rule('f_r', x + w - inset - 1, y + inset + 1, 1, h - 2 * inset - 2, 'rule'),
+    ]
+    corners = (
+        (x, y, 1, 1),
+        (x + w, y, -1, 1),
+        (x, y + h, 1, -1),
+        (x + w, y + h, -1, -1),
+    )
+    for i, (cx, cy, dx, dy) in enumerate(corners):
+        hx = cx if dx > 0 else cx - arm
+        hy = cy if dy > 0 else cy - thick
+        vy = cy if dy > 0 else cy - arm
+        vx = cx if dx > 0 else cx - thick
+        parts.append(_rule('c%dh' % i, hx, hy, arm, thick, 'accent'))
+        parts.append(_rule('c%dv' % i, vx, vy + (thick if dy > 0 else 0), thick, arm - thick, 'accent'))
+    return parts
+
+
+def _footer(mode, x, y, width):
+    """RANGE, WATER, TIME on one baseline. Eco drops coolant."""
+    row = TIME_CELL
+    groups = [('rng', 'RANGE', 86, '{{range}}', 'sqs_num64', 98, '{{u:range}}', 28)]
+    if mode != 'eco':
+        groups.append(('wat', 'WATER', 92, '{{coolant}}', 'sqs_num64', 66, '{{u:temp}}', 24))
+    groups.append(('clk', '', 0, '{{time}}', 'time70', 182, '', 0))
+    gap, join = 8, 4
+    need = 0
+    for _, _, lw, _, _, nw, _, uw in groups:
+        need += (lw + join if lw else 0) + nw + (join + uw if uw else 0)
+    need += gap * (len(groups) - 1)
+    if need > width:
+        raise SystemExit('%s footer needs %d, has %d' % (mode, need, width))
+    parts = []
+    cursor = x
+    for key, label, lw, value, font, nw, unit, uw in groups:
+        base = y + row
+        cell = TIME_CELL if font == 'time70' else NUM_CELL
+        if label:
+            parts.append(_text(key + '_l', label, 'd_label', cursor, base - LABEL_H, lw, LABEL_H, color='dim'))
+            cursor += lw + join
+        parts.append(_text(key, value, font, cursor, base - cell, nw, cell, color='fg'))
+        cursor += nw
+        if unit:
+            cursor += join
+            parts.append(_text(key + '_u', unit, 'd_unit', cursor, base - UNIT_H, uw, UNIT_H, color='dim'))
+            cursor += uw
+        cursor += gap
+    return parts
+
+
+def _overlaps(parts):
+    for i, a in enumerate(parts):
+        for b in parts[i + 1:]:
+            if a['x'] + a['w'] <= b['x'] or b['x'] + b['w'] <= a['x']:
+                continue
+            if a['y'] + a['h'] <= b['y'] or b['y'] + b['h'] <= a['y']:
+                continue
+            raise SystemExit('parts overlap: %s and %s' % (a['id'], b['id']))
+
+
 def layout(mode):
-    right = 1904
     art = ART_RIGHT[mode]
-    # Slash sits entirely to the right of the artwork and entirely to the left of the speed quad.
-    slash_w, slash_slant, slash_h = (16, 52, 112) if mode == 'sport' else (14, 28, 100) if mode == 'comfort' else (8, 4, 72)
-    slash_right = art + 8 + slash_w + slash_slant
-    ix = slash_right + HERO_PAD + 6
-    iw = right - ix
-    top = 28
-
-    speed = {
-        'id': 'spd', 'type': 'text', 'text': '{{speed}}', 'font': 'e_rpm', 'hero': True,
-        'x': ix - HERO_PAD, 'y': top, 'w': min(iw + HERO_PAD - 8, 760), 'h': HERO_H,
-        'align': 'left', 'color': 'fg', 'pad': HERO_PAD,
-    }
-    # Beside the baseline of the digits, not a line of its own underneath.
-    kmh = {
-        'text': 'km/h',
-        'x': ix + (356 if mode == 'eco' else 512),
-        'y': top + HERO_PAD + HERO_GLYPH - 4,
-        'size': 16 if mode == 'eco' else 18, 'color': MUTED, 'alpha': 165, 'anchor': 'ls',
-    }
-
-    bar_y = top + HERO_H + 18
-    bar_h = 36
-    quads = _quads(ix, bar_y, iw - SLANT, bar_h, SLANT, 4)
-    segs = {
-        'id': 'segs', 'type': 'segs', 'count': SEGMENTS, 'redFrom': RED_FROM,
-        'x': ix, 'y': bar_y, 'w': iw, 'h': bar_h,
-        'quads': [[[p[0] - ix, p[1] - bar_y] for p in q] for q in quads],
-    }
-
-    badge_y = bar_y + bar_h + 22
-    badge_h = 88
-    badge_w = 176 if mode != 'eco' else 150
-    badge = {
-        'id': 'gear', 'type': 'badge', 'text': '{{gear}}', 'font': 'b_gear',
-        'x': ix, 'y': badge_y, 'w': badge_w, 'h': badge_h, 'slant': 18,
-    }
-    rpm_w = 86
-    rpm = {
-        'id': 'rpm', 'type': 'text', 'text': '{{rpm}}', 'font': 'e_num',
-        'x': ix + iw - rpm_w, 'y': badge_y + (badge_h - ICON) // 2, 'w': rpm_w, 'h': ICON,
-        'align': 'right', 'color': 'dim',
-    }
-    rpm_label = {
-        'text': 'rpm',
-        'x': rpm['x'] + rpm_w - 78,
-        'y': rpm['y'] + ICON - 4,
-        'size': 18, 'color': MUTED, 'alpha': 160, 'anchor': 'rs',
-    }
-
-    # Just above the fade to black, so the gap under the badge stays modest.
-    row_y = BOTTOM_FADE_Y - ICON - 16
-    row_h = ICON
-    # text widths sized for the footer atlas (about 0.62 em per digit)
-    texts = [('rng', '{{range}}', 'e_num', 92), ('wat', '{{coolant}}', 'e_num', 72), ('clk', '{{time}}', 'e3_time', 132)]
+    # The slash stays in the dark, immediately left of the column.
     if mode == 'eco':
-        texts = [('rng', '{{range}}', 'e_num', 96), ('clk', '{{time}}', 'e3_time', 140)]
-    gap = ITEM_GAP if mode != 'eco' else 36
-    icons, parts_footer = [], []
-    cursor = ix
-    for key, token, font, tw in texts:
-        icons.append({'id': key, 'x': cursor, 'y': row_y + 2, 's': ICON})
-        parts_footer.append({
-            'id': key, 'type': 'text', 'text': token, 'font': font,
-            'x': cursor + ICON + ICON_GAP, 'y': row_y, 'w': tw, 'h': row_h,
-            'align': 'left', 'color': 'dim',
-        })
-        cursor += ICON + ICON_GAP + tw + gap
-    if cursor - gap > right:
-        raise SystemExit('%s footer runs past the screen (%d)' % (mode, cursor))
+        slash = (10, 6, 88)
+    elif mode == 'comfort':
+        slash = (12, 8, 100)
+    else:
+        slash = (16, 36, 120)
+    slash_x = art + 6
+    slash_right = slash_x + slash[0] + slash[1]
+    ix = slash_right + 8
+    top = 24 if mode == 'eco' else 32
+    wide = mode != 'eco'
+    # sq_speed (cell 179) fits beside the gear on Sport. Comfort's artwork
+    # leaves a narrower field, so it uses the sport-square speed (cell 119).
+    speed_font = 'sq_speed' if mode == 'sport' else 'sqs_speed'
+    spec = SPEED[speed_font]
+    pad = _pad(spec['size'])
+    # Eco shows two digits beside the unit; the box is the two-digit ink plus the glow pad.
+    ink = 154 if mode == 'eco' else spec['ink']
+    speed_w = pad + ink + pad
+    speed_h = pad + spec['cell'] + pad
 
-    parts = [speed, segs, badge, rpm] + parts_footer
-    # Bottom-left of the slash is just past the artwork; the top leans toward the digits.
-    stripe = {
-        'x': art + 10,
-        'y': top + HERO_PAD,
-        'w': slash_w,
-        'h': slash_h,
-        'slant': slash_slant,
-    }
+    if wide and ix + speed_w + 12 + (GEAR_W + 16) > RIGHT:
+        raise SystemExit('%s column is short by %d' % (mode, ix + speed_w + 12 + GEAR_W + 16 - RIGHT))
+    if not wide and ix + max(speed_w, GEAR_W + 16) > RIGHT:
+        raise SystemExit('%s stacked column does not fit' % (mode, ))
 
+    parts = []
+    parts.append(_text('spd_l', 'SPEED  速度', 'd_label', ix, top, 160, LABEL_H, color='dim'))
+    speed_y = top + LABEL_H + 6
+    parts.append(_text(
+        'spd', '{{speed}}', speed_font, ix, speed_y, speed_w, speed_h,
+        align='left', color='fg', glow=True, textX=pad, offsetY=pad,
+    ))
+
+    gear_h = GEAR_CELL + 52
+    if wide:
+        gap = 16
+        frame_x = ix + speed_w + gap
+        frame_w = 1910 - frame_x
+        frame_y = speed_y
+        frame_h = max(speed_h, gear_h + 16)
+        gw = min(GEAR_W + 40, frame_w - 16)
+        gear = {
+            'id': 'gear', 'type': 'evagear', 'fontPrefix': 'sq_', 'words': True, 'wordPitch': 96,
+            'x': frame_x + (frame_w - gw) // 2, 'y': frame_y + (frame_h - gear_h) // 2,
+            'w': gw, 'h': gear_h,
+            'class': 'overlay', 'z': 12,
+        }
+        parts += _brackets(frame_x, frame_y, frame_w, frame_h)
+        parts.append(_text(
+            'gearcap', '{{gearcap}}', 'd_unit', frame_x, top, min(frame_w, 200), UNIT_H,
+            color='dim',
+        ))
+        # Centered under the digits, the way the EVA dash puts the unit under the speed.
+        unit_x = ix + pad + spec['ink'] // 2 - 36
+        unit_y = speed_y + speed_h + 4
+        parts.append(_text('spd_u', '{{u:speed}}', 'd_unit', unit_x, unit_y, 80, UNIT_H, color='dim'))
+        bar_y = max(frame_y + frame_h, unit_y + UNIT_H) + 12
+    else:
+        unit_x = ix + speed_w + 8
+        unit_y = speed_y + pad + spec['cell'] - UNIT_H
+        parts.append(_text('spd_u', '{{u:speed}}', 'd_unit', unit_x, unit_y, 64, UNIT_H, color='dim'))
+        # The rev bar and the rpm figure share a row; the gear sits under them.
+        bar_y = speed_y + speed_h + 8
+        frame_x = ix
+        frame_w = GEAR_W + 16
+        gear_h = GEAR_CELL + 40
+        frame_h = gear_h + 16
+        gear = {
+            'id': 'gear', 'type': 'evagear', 'fontPrefix': 'sq_', 'words': True, 'wordPitch': 96,
+            'x': frame_x + 8, 'y': 0, 'w': GEAR_W, 'h': gear_h,
+            'class': 'overlay', 'z': 12,
+        }
+
+    bar_h = 22
+    rpm_font = 'd_num42' if wide else 'sqs_num64'
+    rpm_cell = RPM_CELL[rpm_font]
+    if wide:
+        bar_w = RIGHT - ix
+        rpm_x, rpm_y, rpm_w = ix + 78, bar_y + bar_h + 10, 200
+        parts.append(_text('rpm_l', 'RPM', 'd_label', ix, rpm_y + rpm_cell - LABEL_H, 70, LABEL_H, color='dim'))
+    else:
+        # number at the right of the bar, on the same row, so the gear can sit higher
+        rpm_w, label_w = 130, 54
+        bar_w = RIGHT - ix - label_w - rpm_w - 16
+        label_x = ix + bar_w + 8
+        rpm_x = label_x + label_w + 4
+        rpm_y = bar_y
+        parts.append(_text('rpm_l', 'RPM', 'd_label', label_x, rpm_y + rpm_cell - LABEL_H, label_w, LABEL_H, color='dim'))
+    parts.append({
+        'id': 'segs', 'type': 'segs', 'count': SEGMENTS, 'redFrom': RED_FROM,
+        'x': ix, 'y': bar_y if wide else rpm_y + rpm_cell - bar_h, 'w': bar_w, 'h': bar_h,
+        'quads': _rects(bar_w, bar_h, SEGMENTS, 3),
+    })
+    parts.append(_text('rpm', '{{rpm}}', rpm_font, rpm_x, rpm_y, rpm_w, rpm_cell, color='fg'))
+
+    if wide:
+        foot_y = rpm_y + rpm_cell + 18
+        parts += _footer(mode, ix, foot_y, RIGHT - ix)
+    else:
+        gear['y'] = rpm_y + rpm_cell + 8
+        parts += _brackets(frame_x, gear['y'] - 8, frame_w, frame_h)
+        foot_y = gear['y'] - 8 + frame_h + 6
+        parts += _footer(mode, ix, foot_y, RIGHT - ix)
+
+    _overlaps(parts)
     for p in parts:
-        left_limit = ix - HERO_PAD - 1 if p['id'] == 'spd' else ix - 1
-        if p['x'] < left_limit or p['x'] + p['w'] > right + 1:
-            raise SystemExit('%s part leaves the column: %s' % (mode, p['id']))
-        if p['y'] < 24 or p['y'] + p['h'] > CLEAR_Y:
+        if p['x'] < ix - 1 or p['x'] + p['w'] > 1912:
+            raise SystemExit('%s part leaves the column: %s x %d w %d' % (mode, p['id'], p['x'], p['w']))
+        if p['y'] < 20 or p['y'] + p['h'] > CLEAR_Y:
             raise SystemExit('%s part hits the BMW row: %s y %d' % (mode, p['id'], p['y']))
-    # speed quad must not cover the slash
-    slash_right = stripe['x'] + stripe['w'] + stripe['slant']
-    ink_left = speed['x'] + speed['pad']
-    if slash_right > ink_left - 6:
-        raise SystemExit('%s slash meets the digits (%d >= %d)' % (mode, slash_right, ink_left))
+    if gear['x'] < ix or gear['y'] + gear['h'] > CLEAR_Y:
+        raise SystemExit('%s gear leaves the column' % mode)
 
     return {
         'column': art,
         'fade': FADE[mode],
         'parts': parts,
-        'quads': quads,
-        'kmh': kmh,
-        'rpm_label': rpm_label,
-        'icons': icons,
-        'stripe': stripe,
-        'canvas': (min(p['x'] for p in parts), top - 4,
-                   right - min(p['x'] for p in parts), CLEAR_Y - (top - 4)),
+        'gear': gear,
+        'stripe': {'x': slash_x, 'y': top + 8, 'w': slash[0], 'h': slash[2], 'slant': slash[1]},
+        'speed_font': speed_font,
     }

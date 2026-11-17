@@ -95,6 +95,8 @@ def bake(name, size, chars, shear):
 
 
 def main():
+    if os.path.islink(OUT) or os.path.isfile(os.path.join(OUT, 'sq_speed.json')):
+        raise SystemExit('apps/shadow_dash/hud/fonts is the EVA atlas set; not overwriting it')
     bake('e_rpm', 322, '0123456789-', SHEAR)
     bake('e_num', 40, '0123456789-', 0)
     bake('b_gear', 78, '0123456789PRND-', 0)

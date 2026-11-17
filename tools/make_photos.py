@@ -3,39 +3,23 @@
 
 Scales each source to width 1920 without stretching, then crops the same amount
 off the top and the bottom to 1920x640. The portrait and slogan stay. The dark
-right-hand side gets a horizontal fade (not a box), a slanted accent stripe,
-empty rpm-segment outlines, three small icons and a small km/h. Live numbers
-are drawn by the app.
+right-hand side fades to black, and a slanted accent sits in that dark, left of
+the instruments. The app draws the numbers.
 
     python3 -X utf8 tools/make_photos.py
 """
 import os
 import sys
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from shadow_geom import ACCENT, BOTTOM_FADE_Y, MUTED, NAVY, PHOTO_H, PHOTO_W, layout  # noqa: E402
+from shadow_geom import ACCENT, BOTTOM_FADE_Y, NAVY, PHOTO_H, PHOTO_W, layout  # noqa: E402
 
 SRC = os.path.join(HERE, 'photos-src')
 OUT = os.path.join(HERE, '..', 'apps', 'shadow_dash', 'hud', 'photos')
 MODES = ('sport', 'comfort', 'eco')
-
-EN_CANDIDATES = [
-    os.environ.get('SHADOW_EN_FONT'),
-    'C:/Windows/Fonts/arialbd.ttf',
-    '/Library/Fonts/Arial Bold.ttf',
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-]
-
-
-def _font(size):
-    for path in EN_CANDIDATES:
-        if path and os.path.isfile(path):
-            return ImageFont.truetype(path, size)
-    raise SystemExit('No Latin font for the baked marks. Set SHADOW_EN_FONT.')
-
 
 def fit_panel(im):
     im = im.convert('RGBA')
@@ -68,26 +52,6 @@ def _fade(im, x0, x1, strength):
             px[x, y] = (int(r * (1 - k)), int(g * (1 - k)), int(b * (1 - k)), a)
 
 
-def _icon_fuel(d, x, y, s, color):
-    d.rounded_rectangle([x + 4, y + 3, x + s - 5, y + s - 2], radius=2, outline=color, width=2)
-    d.rectangle([x + s - 8, y + 6, x + s - 2, y + 11], outline=color, width=2)
-
-
-def _icon_temp(d, x, y, s, color):
-    d.line([x + s // 2, y + 3, x + s // 2, y + s - 8], fill=color, width=2)
-    d.ellipse([x + s // 2 - 5, y + s - 12, x + s // 2 + 5, y + s - 2], outline=color, width=2)
-
-
-def _icon_clock(d, x, y, s, color):
-    d.ellipse([x + 2, y + 2, x + s - 2, y + s - 2], outline=color, width=2)
-    cx, cy = x + s // 2, y + s // 2
-    d.line([cx, cy, cx, y + 6], fill=color, width=2)
-    d.line([cx, cy, x + s - 6, cy + 2], fill=color, width=2)
-
-
-ICONS = {'rng': _icon_fuel, 'wat': _icon_temp, 'clk': _icon_clock}
-
-
 def _fade_bottom(im, y0, y_black=636):
     """Fade to pure black by y_black. Rows from there down match the panel below the photo."""
     px = im.load()
@@ -107,38 +71,23 @@ def _fade_bottom(im, y0, y_black=636):
             px[x, y] = (int(r * keep), int(g * keep), int(b * keep), a)
 
 
-def _outline(draw, quad, color, width):
-    draw.line(list(quad) + [quad[0]], fill=color, width=width)
-
-
-def build(mode, font):
+def build(mode):
     src = os.path.join(SRC, mode + '.png')
     if not os.path.isfile(src):
         raise SystemExit('missing %s' % src)
     base = fit_panel(Image.open(src))
     spec = layout(mode)
-    speed = spec['parts'][0]
+    speed = next(p for p in spec['parts'] if p['id'] == 'spd')
     # fully black by the time the instruments start, so the panel below the photo matches
-    _fade(base, spec['fade'], speed['x'] - 10, 1.0)
+    _fade(base, spec['fade'], speed['x'] - 8, 1.0)
     ov = Image.new('RGBA', (PHOTO_W, PHOTO_H), (0, 0, 0, 0))
     d = ImageDraw.Draw(ov)
-    acc = ACCENT[mode] + (255,)
     st = spec['stripe']
     sx, sy, sw, sh, slant = st['x'], st['y'], st['w'], st['h'], st['slant']
     band = [(sx, sy + sh), (sx + sw, sy + sh), (sx + sw + slant, sy), (sx + slant, sy)]
     if mode == 'comfort':
-        d.polygon([(p[0] - 8, p[1]) for p in band], fill=NAVY + (255,))
-    d.polygon(band, fill=acc)
-    muted = MUTED + (190,)
-    for i, quad in enumerate(spec['quads']):
-        red = i >= 14
-        _outline(d, quad, (255, 54, 48, 230) if red else (255, 255, 255, 110), 2 if red else 1)
-    kmh = spec['kmh']
-    d.text((kmh['x'], kmh['y']), kmh['text'], font=_font(kmh['size']), fill=muted, anchor=kmh['anchor'])
-    label = spec['rpm_label']
-    d.text((label['x'], label['y']), label['text'], font=font, fill=MUTED + (label['alpha'],), anchor=label['anchor'])
-    for icon in spec['icons']:
-        ICONS[icon['id']](d, icon['x'], icon['y'], icon['s'], muted)
+        d.polygon([(p[0] - 6, p[1]) for p in band], fill=NAVY + (255,))
+    d.polygon(band, fill=ACCENT[mode] + (255,))
     out = Image.alpha_composite(base, ov)
     _fade_bottom(out, BOTTOM_FADE_Y)
     os.makedirs(OUT, exist_ok=True)
@@ -150,9 +99,8 @@ def build(mode, font):
 
 
 def main():
-    font = _font(22)
     for mode in MODES:
-        build(mode, font)
+        build(mode)
 
 
 if __name__ == '__main__':

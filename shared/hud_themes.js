@@ -78,34 +78,34 @@ const THEMES = {
         ok: [84, 224, 143, 255], okSoft: [159, 217, 184, 255], waitSoft: [255, 217, 138, 255], no: [255, 59, 47, 255], noSoft: [255, 177, 170, 255], blue: [120, 205, 255, 255],
         rule: [120, 205, 255, 90], black: [0, 0, 0, 255], amber: [255, 176, 0, 255], white: [255, 255, 255, 255], live: [255, 255, 255, 215], alert: [255, 17, 0, 255],
     },
-    // Shadow dash: numbers are white on the photo's dark right-hand field. Accents follow the picture
-    // (sport orange, comfort orange with a navy track, eco orange). The rev bar runs 0-8000 rpm.
+    // Shadow, 洋流: EVA's roles, recoloured. Numbers are the slogan cream, the accent is the
+    // campaign orange, Comfort's lines and unlit segments are deep navy. Red is the redline only.
     shadow_sport: {
         name: 'Shadow Sport',
-        fg: [255, 255, 255, 255], dim: [255, 255, 255, 153], track: [255, 92, 0, 48], arc: [255, 92, 0, 255],
-        glow: 0.35, stripe: false,
-        bar: { low: [255, 140, 48], mid: [255, 92, 0], high: [255, 42, 42], midAt: 0.75 },
-        rev: { from: [255, 150, 56], to: [255, 92, 0] },
-        accent: [255, 92, 0, 255], tag: [255, 92, 0, 255], sub: [210, 214, 220, 255], faint: [255, 92, 0, 40], wire: [255, 92, 0, 120],
-        rule: [255, 92, 0, 140], black: [0, 0, 0, 255], white: [255, 255, 255, 255], amber: [255, 176, 64, 255], alert: [255, 42, 42, 255],
+        fg: [245, 235, 220, 255], dim: [245, 235, 220, 150], track: [255, 106, 0, 46], arc: [255, 106, 0, 255],
+        glow: 0.3, stripe: false,
+        bar: { low: [255, 140, 48], mid: [255, 106, 0], high: [255, 42, 42], midAt: 0.86 },
+        rev: { from: [255, 150, 56], to: [255, 106, 0] },
+        accent: [255, 106, 0, 255], tag: [255, 106, 0, 255], sub: [245, 235, 220, 180], faint: [255, 106, 0, 40], wire: [255, 106, 0, 120],
+        rule: [255, 106, 0, 150], black: [0, 0, 0, 255], white: [245, 235, 220, 255], amber: [255, 176, 64, 255], alert: [255, 42, 42, 255],
     },
     shadow_comfort: {
         name: 'Shadow Comfort',
-        fg: [255, 255, 255, 255], dim: [255, 255, 255, 153], track: [36, 58, 96, 170], arc: [240, 112, 0, 255],
-        glow: 0.35, stripe: false,
-        bar: { low: [255, 168, 72], mid: [240, 112, 0], high: [255, 42, 42], midAt: 0.75 },
-        rev: { from: [255, 176, 80], to: [240, 112, 0] },
-        accent: [240, 112, 0, 255], tag: [240, 112, 0, 255], sub: [210, 216, 226, 255], faint: [36, 58, 96, 80], wire: [240, 112, 0, 120],
-        rule: [22, 42, 78, 255], black: [0, 0, 0, 255], white: [255, 255, 255, 255], amber: [255, 176, 64, 255], alert: [255, 42, 42, 255],
+        fg: [245, 235, 220, 255], dim: [245, 235, 220, 150], track: [20, 40, 75, 120], arc: [255, 106, 0, 255],
+        glow: 0.3, stripe: false,
+        bar: { low: [255, 150, 64], mid: [255, 106, 0], high: [255, 42, 42], midAt: 0.86 },
+        rev: { from: [255, 160, 70], to: [255, 106, 0] },
+        accent: [255, 106, 0, 255], tag: [255, 106, 0, 255], sub: [245, 235, 220, 180], faint: [20, 40, 75, 90], wire: [20, 40, 75, 160],
+        rule: [20, 40, 75, 230], black: [0, 0, 0, 255], white: [245, 235, 220, 255], amber: [255, 176, 64, 255], alert: [255, 42, 42, 255],
     },
     shadow_eco: {
         name: 'Shadow Eco Pro',
-        fg: [255, 255, 255, 255], dim: [255, 255, 255, 153], track: [255, 106, 0, 48], arc: [255, 106, 0, 255],
-        glow: 0.35, stripe: false,
-        bar: { low: [255, 150, 48], mid: [255, 106, 0], high: [255, 42, 42], midAt: 0.75 },
+        fg: [245, 235, 220, 255], dim: [245, 235, 220, 150], track: [255, 106, 0, 46], arc: [255, 106, 0, 255],
+        glow: 0.3, stripe: false,
+        bar: { low: [255, 150, 48], mid: [255, 106, 0], high: [255, 42, 42], midAt: 0.86 },
         rev: { from: [255, 160, 64], to: [255, 106, 0] },
-        accent: [255, 106, 0, 255], tag: [255, 106, 0, 255], sub: [210, 214, 220, 255], faint: [255, 106, 0, 40], wire: [255, 106, 0, 120],
-        rule: [255, 106, 0, 140], black: [0, 0, 0, 255], white: [255, 255, 255, 255], amber: [255, 176, 64, 255], alert: [255, 42, 42, 255],
+        accent: [255, 106, 0, 255], tag: [255, 106, 0, 255], sub: [245, 235, 220, 180], faint: [255, 106, 0, 40], wire: [255, 106, 0, 120],
+        rule: [255, 106, 0, 150], black: [0, 0, 0, 255], white: [245, 235, 220, 255], amber: [255, 176, 64, 255], alert: [255, 42, 42, 255],
     },
 };
 // every theme: the shift-point red, used by "hot" (the gear and SHIFT at the shift point, the rev bar past it)

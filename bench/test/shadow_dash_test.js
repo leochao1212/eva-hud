@@ -21,13 +21,14 @@ const load = (name) => JSON.parse(fs.readFileSync(path.join(HUD, 'layouts', name
 const PHOTO_BYTES = 1920 * 640 * 4;
 const CLEAR_Y = 636;   // 720 - 84: BMW's warning row
 // art ends left of these x values on the cropped 1920x640 photo
-const SAFE_X = { sport: 1190, comfort: 1300, eco: 1460 };
+const SAFE_X = { sport: 1190, comfort: 1270, eco: 1460 };
 const READINGS = {
-    sport: ['{{speed}}', '{{gear}}', '{{rpm}}', '{{range}}', '{{coolant}}', '{{time}}'],
-    comfort: ['{{speed}}', '{{gear}}', '{{rpm}}', '{{range}}', '{{coolant}}', '{{time}}'],
-    eco: ['{{speed}}', '{{gear}}', '{{rpm}}', '{{range}}', '{{time}}'],
+    sport: ['{{speed}}', '{{rpm}}', '{{range}}', '{{coolant}}', '{{time}}'],
+    comfort: ['{{speed}}', '{{rpm}}', '{{range}}', '{{coolant}}', '{{time}}'],
+    eco: ['{{speed}}', '{{rpm}}', '{{range}}', '{{time}}'],
 };
-const FONTS = { spd: 'e_rpm', rpm: 'e_num', gear: 'b_gear', rng: 'e_num', wat: 'e_num', clk: 'e3_time' };
+const SPEED_FONT = { sport: 'sq_speed', comfort: 'sqs_speed', eco: 'sqs_speed' };
+const RPM_FONT = { sport: 'd_num42', comfort: 'd_num42', eco: 'sqs_num64' };
 
 function layoutTests() {
     const tests = {};
@@ -38,7 +39,8 @@ function layoutTests() {
             assert.strictEqual(layout.theme, 'shadow_' + mode);
             const theme = THEMES[layout.theme];
             assert.ok(theme, 'no theme ' + layout.theme);
-            assert.ok(theme.accent[0] > 200 && theme.accent[1] < 180 && theme.accent[2] < 80, mode + ' accent is orange');
+            assert.ok(theme.accent[0] > 200 && theme.accent[1] < 160 && theme.accent[2] < 40, mode + ' accent is orange');
+            assert.deepStrictEqual(theme.fg.slice(0, 3), [245, 235, 220], mode + ' numbers are cream');
             const photo = layout.widgets.find((w) => w.type === 'evaphoto');
             const canvas = layout.widgets.find((w) => w.type === 'evacanvas');
             assert.ok(photo && canvas, 'photo or canvas missing');
@@ -46,14 +48,17 @@ function layoutTests() {
             assert.strictEqual(photo.photo, mode);
             assert.deepStrictEqual([photo.x, photo.y, photo.w, photo.h], [0, 0, 1920, 640]);
             const segs = canvas.parts.find((p) => p.type === 'segs');
-            const badge = canvas.parts.find((p) => p.type === 'badge');
             const speed = canvas.parts.find((p) => p.id === 'spd');
-            assert.ok(segs && segs.count === 16 && segs.redFrom === 14, 'rpm segments');
-            assert.ok(badge && badge.slant > 0, 'gear badge');
-            assert.ok(speed && speed.hero && speed.pad >= 24 && speed.h >= 280, 'hero speed');
-            const live = canvas.parts.filter((p) => p.text && p.text.indexOf('{{') === 0);
+            const gear = layout.widgets.find((w) => w.type === 'evagear');
+            assert.ok(segs && segs.count === 28 && segs.redFrom === 24, 'rpm segments');
+            assert.ok(!canvas.parts.some((p) => p.type === 'badge'), 'no filled gear badge');
+            assert.ok(speed && speed.glow && speed.offsetY >= 18 && speed.font === SPEED_FONT[mode], 'speed atlas');
+            assert.strictEqual(canvas.parts.find((p) => p.id === 'rpm').font, RPM_FONT[mode]);
+            assert.strictEqual(canvas.parts.find((p) => p.id === 'spd_l').font, 'd_label');
+            assert.strictEqual(canvas.parts.find((p) => p.id === 'spd_u').font, 'd_unit');
+            assert.ok(gear && gear.fontPrefix === 'sq_' && gear.words, 'EVA gear');
+            const live = canvas.parts.filter((p) => p.text && READINGS[mode].indexOf(p.text) >= 0);
             assert.deepStrictEqual(live.map((p) => p.text), READINGS[mode]);
-            live.filter((p) => p.type === 'text' || p.type === 'badge').forEach((p) => assert.strictEqual(p.font, FONTS[p.id], p.id));
             assert.strictEqual(canvas.parts.filter((p) => /^s\d$/.test(p.id)).length, 0, 'the 0-8 ticks are gone');
             const boxes = layout.widgets.filter((w) => w.id !== 'bg').map((w) => [w.x, w.y, w.w, w.h]);
             canvas.parts.forEach((p) => boxes.push([canvas.x + p.x, canvas.y + p.y, p.w, p.h]));
@@ -75,7 +80,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.2.2');
+        assert.strictEqual(shadow.version, '1.3.0');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);
@@ -155,7 +160,7 @@ function runtimeTests() {
             assert.strictEqual(dash.target, 'panel');
             assert.strictEqual(dash.activeName, 'shadow_comfort');
             assert.deepStrictEqual(client.targets(), ['panel']);
-            assert.strictEqual(client.layers.size, 2);
+            assert.strictEqual(client.layers.size, 3);
             const photo = Array.from(client.layers.values()).find((l) => l.iw === 1920 && l.ih === 640);
             assert.ok(photo, 'no full-cluster photo');
             const sent = client.sent.find((s) => s.ref && client.layers.get(s.ref) === photo);
