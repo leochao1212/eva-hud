@@ -100,6 +100,44 @@ function layoutTests() {
             }
         };
     });
+    tests['the Eco slogan ends left of the stock gear window'] = () => {
+        const rgba = fs.readFileSync(path.join(HUD, 'photos', 'eco.rgba'));
+        const W = 1920;
+        const gearL = GEAR_WINDOW[0];
+        const runs = [];
+        for (let y = 100; y < 400; y++) {
+            let left = -1;
+            let right = -1;
+            for (let x = 600; x < gearL + 80; x++) {
+                const i = (y * W + x) * 4;
+                const r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
+                const cream = r > 200 && g > 170 && b > 120;
+                const orange = r > 180 && b < 80 && r > g + 30 && g > 40;
+                if (cream || orange) {
+                    if (left < 0) left = x;
+                    right = x;
+                }
+            }
+            if (right >= 0) runs.push({ y: y, left: left, right: right });
+        }
+        const boxes = [];
+        runs.forEach((row) => {
+            const last = boxes[boxes.length - 1];
+            if (last && row.y - last.y1 <= 6) {
+                last.y1 = row.y;
+                last.x0 = Math.min(last.x0, row.left);
+                last.x1 = Math.max(last.x1, row.right);
+            } else boxes.push({ x0: row.left, x1: row.right, y0: row.y, y1: row.y });
+        });
+        const text = boxes.filter((b) => b.y1 - b.y0 >= 8 && b.x1 - b.x0 >= 40);
+        assert.ok(text.length >= 2, 'the Eco tag and slogan were not found');
+        text.forEach((b) => {
+            assert.ok(b.x1 < gearL - 40, 'Eco text reaches x ' + b.x1 + ', the gear window starts at ' + gearL);
+            const hits = b.x1 >= GEAR_WINDOW[0] && b.x0 < GEAR_WINDOW[0] + GEAR_WINDOW[2] &&
+                b.y1 >= GEAR_WINDOW[1] && b.y0 < GEAR_WINDOW[1] + GEAR_WINDOW[3];
+            assert.ok(!hits, 'an Eco text box intersects the gear window');
+        });
+    };
     tests['EVA no longer ships the Shadow photos or the Shadow menu row'] = () => {
         const spec = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/eva_hud/app.json'), 'utf8'));
         spec.settings.forEach((s) => (s.options || []).forEach((o) => assert.notStrictEqual(o[0], 'shadow', s.key)));

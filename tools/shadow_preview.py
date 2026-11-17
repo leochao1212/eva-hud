@@ -37,7 +37,9 @@ def main(out):
         bottom = pixels[636*1920*4:]
         assert all(bottom[i:i+3]==b'\0\0\0' for i in range(0,len(bottom),4)), 'nonblack BMW warning row'
         png(out/(mode+'.png'),pixels,1920,720)
-        left, crop_width = ART_RIGHT[mode], 1920-ART_RIGHT[mode]
+        # Eco's crop starts before the moved slogan so the gap to the gear window is visible.
+        left = 960 if mode == 'eco' else ART_RIGHT[mode]
+        crop_width = 1920 - left
         rows = []
         for y in range(636):
             row = pixels[(y*1920+left)*4:(y+1)*1920*4]
