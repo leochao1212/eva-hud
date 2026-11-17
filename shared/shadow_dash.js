@@ -10,7 +10,7 @@
  * The three photos and the layouts live in this app's hud/ (tools/make_photos.py, tools/shadow_layout.py).
  * Instruments sit in the dark area on the right of each photo. The fade, the diagonal stripe,
  * the segment outlines, the icons and km/h are baked into the photo. This class draws what changes:
- * the speed (the e_rpm atlas, scaled up to the hero box and sheared so it leans like the slogan),
+ * the speed (the e_rpm atlas drawn 1:1 inside a padded box; the preview atlas is already italic),
  * the lit rpm segments, the gear badge, and the range, coolant and time.
  * Number glyphs are the same atlases as EVA (e_rpm, e_num, b_gear, e3_time).
  */
@@ -98,8 +98,8 @@ class ShadowDash extends EvaHud {
 
     /**
      * The hero is the atlas at its own size, inset so the glow fades out before the quad edge.
-     * No upscale and no shear: an italic look comes from an italic atlas (the preview bakes
-     * DejaVu Bold Oblique at this size; on the car, e_rpm is whatever atlas was linked).
+     * No upscale and no shear: an italic look comes from the atlas. The preview bakes
+     * DejaVu Bold at cell height 248; on the car, e_rpm is whatever atlas was linked.
      */
     _paintHero(p, look) {
         const cut = look.indexOf('|');

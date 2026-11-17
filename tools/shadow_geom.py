@@ -12,10 +12,12 @@ PHOTO_W, PHOTO_H = 1920, 640
 PANEL_H = 720
 CLEAR_Y = PANEL_H - 84  # 636
 
-# Left edge of each instrument column, past the art. Eco keeps the full picture:
-# shifting it far enough for a 600px column cuts the captain.
-COLUMNS = {'sport': 1216, 'comfort': 1336, 'eco': 1488}
+# Rightmost artwork in the band where the slash sits (y 30-180), measured on the
+# 1920x640 crop. The slash must stay to the right of this.
+ART_RIGHT = {'sport': 1172, 'comfort': 1248, 'eco': 1452}
 FADE = {'sport': 1060, 'comfort': 1180, 'eco': 1360}
+# Photo rows from here down fade to pure black; y=636-720 is that same black.
+BOTTOM_FADE_Y = 576
 
 ACCENT = {
     'sport': (255, 92, 0),
@@ -29,7 +31,9 @@ SEGMENTS = 16
 RED_FROM = 14
 SLANT = 18
 HERO_PAD = 32          # glow must reach 0 inside this inset
-HERO_H = 220           # part height; preview glyph cell fits in HERO_H - 2*HERO_PAD
+# The visible digits are HERO_GLYPH tall. The part is taller by the padding.
+HERO_GLYPH = 248
+HERO_H = HERO_GLYPH + 2 * HERO_PAD
 ICON = 32              # matches the footer number cap-height
 ICON_GAP = 12
 ITEM_GAP = 48
@@ -46,26 +50,30 @@ def _quads(x, y, w, h, slant, gap):
 
 
 def layout(mode):
-    col = COLUMNS[mode]
     right = 1904
-    width = right - col
-    # content column, one left edge for the bar, the badge and the footer
-    # ix is the left edge of the ink. The speed quad starts HERO_PAD to the left,
-    # and that strip stays transparent so it cannot cover the slash.
-    ix = col + 20
+    art = ART_RIGHT[mode]
+    # Slash sits entirely to the right of the artwork and entirely to the left of the speed quad.
+    slash_w, slash_slant, slash_h = (16, 52, 112) if mode == 'sport' else (14, 28, 100) if mode == 'comfort' else (8, 4, 72)
+    slash_right = art + 8 + slash_w + slash_slant
+    ix = slash_right + HERO_PAD + 6
     iw = right - ix
-    top = 40
+    top = 28
 
     speed = {
         'id': 'spd', 'type': 'text', 'text': '{{speed}}', 'font': 'e_rpm', 'hero': True,
-        'x': ix - HERO_PAD, 'y': top, 'w': min(iw + HERO_PAD, 700), 'h': HERO_H,
+        'x': ix - HERO_PAD, 'y': top, 'w': min(iw + HERO_PAD - 8, 760), 'h': HERO_H,
         'align': 'left', 'color': 'fg', 'pad': HERO_PAD,
     }
-    kmh_y = speed['y'] + speed['h'] + 10
-    kmh = {'text': 'km/h', 'x': ix, 'y': kmh_y, 'size': 20, 'color': MUTED, 'alpha': 160}
+    # Beside the baseline of the digits, not a line of its own underneath.
+    kmh = {
+        'text': 'km/h',
+        'x': ix + (356 if mode == 'eco' else 512),
+        'y': top + HERO_PAD + HERO_GLYPH - 4,
+        'size': 16 if mode == 'eco' else 18, 'color': MUTED, 'alpha': 165, 'anchor': 'ls',
+    }
 
-    bar_y = kmh_y + 36
-    bar_h = 34
+    bar_y = top + HERO_H + 18
+    bar_h = 36
     quads = _quads(ix, bar_y, iw - SLANT, bar_h, SLANT, 4)
     segs = {
         'id': 'segs', 'type': 'segs', 'count': SEGMENTS, 'redFrom': RED_FROM,
@@ -73,27 +81,28 @@ def layout(mode):
         'quads': [[[p[0] - ix, p[1] - bar_y] for p in q] for q in quads],
     }
 
-    # badge on the left, rpm number right-aligned to the bar, same row
-    badge_y = bar_y + bar_h + 28
-    badge_h = 96
-    badge_w = 168 if mode != 'eco' else 148
+    badge_y = bar_y + bar_h + 22
+    badge_h = 88
+    badge_w = 176 if mode != 'eco' else 150
     badge = {
         'id': 'gear', 'type': 'badge', 'text': '{{gear}}', 'font': 'b_gear',
         'x': ix, 'y': badge_y, 'w': badge_w, 'h': badge_h, 'slant': 18,
     }
-    rpm_w = 168
+    rpm_w = 86
     rpm = {
         'id': 'rpm', 'type': 'text', 'text': '{{rpm}}', 'font': 'e_num',
-        'x': ix + iw - rpm_w, 'y': badge_y + 8, 'w': rpm_w, 'h': ICON,
+        'x': ix + iw - rpm_w, 'y': badge_y + (badge_h - ICON) // 2, 'w': rpm_w, 'h': ICON,
         'align': 'right', 'color': 'dim',
     }
     rpm_label = {
-        'text': 'rpm', 'x': rpm['x'] - 8, 'y': badge_y + 14, 'size': 18,
-        'color': MUTED, 'alpha': 150, 'anchor': 'rt',
+        'text': 'rpm',
+        'x': rpm['x'] + rpm_w - 78,
+        'y': rpm['y'] + ICON - 4,
+        'size': 18, 'color': MUTED, 'alpha': 160, 'anchor': 'rs',
     }
 
-    # footer pinned near the bottom so the column uses the height
-    row_y = 574
+    # Just above the fade to black, so the gap under the badge stays modest.
+    row_y = BOTTOM_FADE_Y - ICON - 16
     row_h = ICON
     # text widths sized for the footer atlas (about 0.62 em per digit)
     texts = [('rng', '{{range}}', 'e_num', 92), ('wat', '{{coolant}}', 'e_num', 72), ('clk', '{{time}}', 'e3_time', 132)]
@@ -114,14 +123,13 @@ def layout(mode):
         raise SystemExit('%s footer runs past the screen (%d)' % (mode, cursor))
 
     parts = [speed, segs, badge, rpm] + parts_footer
-    # slash: its rightmost point stays left of the speed quad
-    slash_top_right = ix - 18
+    # Bottom-left of the slash is just past the artwork; the top leans toward the digits.
     stripe = {
-        'x': slash_top_right - 110,
-        'y': top + 6,
-        'w': 16,
-        'h': 132,
-        'slant': 78,
+        'x': art + 10,
+        'y': top + HERO_PAD,
+        'w': slash_w,
+        'h': slash_h,
+        'slant': slash_slant,
     }
 
     for p in parts:
@@ -137,7 +145,7 @@ def layout(mode):
         raise SystemExit('%s slash meets the digits (%d >= %d)' % (mode, slash_right, ink_left))
 
     return {
-        'column': col,
+        'column': art,
         'fade': FADE[mode],
         'parts': parts,
         'quads': quads,

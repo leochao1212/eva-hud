@@ -21,7 +21,9 @@ FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
 OUT = os.path.join(HERE, '..', 'apps', 'shadow_dash', 'hud', 'fonts')
 ATLAS_W = 1024
 # positive: top of the glyph leans right, about the same angle as the baked slash
-SHEAR = 0.18
+SHEAR = 0.16
+# Narrow the upright digits a little so a ~256px "118" still fits beside the slash.
+CONDENSE = 0.68
 
 
 def _shear(im, k):
@@ -41,9 +43,10 @@ def bake(name, size, chars, shear):
         w, h = r - l + 4, b - t + 4
         img = Image.new('L', (w, h), 0)
         ImageDraw.Draw(img).text((2 - l, 2 - t), c, font=font, fill=255, anchor='ls')
+        img = img.resize((max(1, int(round(img.size[0] * CONDENSE))), img.size[1]), Image.LANCZOS)
         if shear:
             img = _shear(img, shear)
-        raw[c] = (img, font.getlength(c))
+        raw[c] = (img, font.getlength(c) * CONDENSE)
     height = max(im.size[1] for im, _ in raw.values())
     tab = max(adv for c, (im, adv) in raw.items() if c in '0123456789') if any(c in chars for c in '0123456789') else 0
     cells = []
@@ -86,13 +89,13 @@ def bake(name, size, chars, shear):
     with open(os.path.join(OUT, name + '.json'), 'w', encoding='utf-8') as f:
         json.dump(meta, f, separators=(',', ':'))
     sample = ''.join(c for c in '118' if c in glyphs)
-    print('%-8s size %3d cell %3d  %s width %d' % (
-        name, size, height, sample, sum(glyphs[c]['advance'] for c in sample)))
+    ink = sum(glyphs[c]['advance'] for c in sample[:-1]) + glyphs[sample[-1]]['w']
+    print('%-8s size %3d cell %3d  %s advance %d ink %d' % (
+        name, size, height, sample, sum(glyphs[c]['advance'] for c in sample), ink))
 
 
 def main():
-    # largest DejaVu size whose ink still fits the Eco column (three digits + shear)
-    bake('e_rpm', 168, '0123456789-', SHEAR)
+    bake('e_rpm', 322, '0123456789-', SHEAR)
     bake('e_num', 40, '0123456789-', 0)
     bake('b_gear', 78, '0123456789PRND-', 0)
     bake('e3_time', 40, '0123456789:', 0)

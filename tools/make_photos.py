@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from shadow_geom import ACCENT, MUTED, NAVY, PHOTO_H, PHOTO_W, layout  # noqa: E402
+from shadow_geom import ACCENT, BOTTOM_FADE_Y, MUTED, NAVY, PHOTO_H, PHOTO_W, layout  # noqa: E402
 
 SRC = os.path.join(HERE, 'photos-src')
 OUT = os.path.join(HERE, '..', 'apps', 'shadow_dash', 'hud', 'photos')
@@ -88,6 +88,25 @@ def _icon_clock(d, x, y, s, color):
 ICONS = {'rng': _icon_fuel, 'wat': _icon_temp, 'clk': _icon_clock}
 
 
+def _fade_bottom(im, y0, y_black=636):
+    """Fade to pure black by y_black. Rows from there down match the panel below the photo."""
+    px = im.load()
+    w, h = im.size
+    span = max(1, y_black - y0)
+    for y in range(max(0, y0), h):
+        if y >= y_black:
+            t = 1.0
+        else:
+            t = (y - y0) / float(span)
+            t = t * t * (3 - 2 * t)
+        if t <= 0:
+            continue
+        keep = 0 if t >= 1 else (1 - t)
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            px[x, y] = (int(r * keep), int(g * keep), int(b * keep), a)
+
+
 def _outline(draw, quad, color, width):
     draw.line(list(quad) + [quad[0]], fill=color, width=width)
 
@@ -108,18 +127,20 @@ def build(mode, font):
     sx, sy, sw, sh, slant = st['x'], st['y'], st['w'], st['h'], st['slant']
     band = [(sx, sy + sh), (sx + sw, sy + sh), (sx + sw + slant, sy), (sx + slant, sy)]
     if mode == 'comfort':
-        d.polygon([(p[0] - 16, p[1]) for p in band], fill=NAVY + (255,))
+        d.polygon([(p[0] - 8, p[1]) for p in band], fill=NAVY + (255,))
     d.polygon(band, fill=acc)
     muted = MUTED + (190,)
     for i, quad in enumerate(spec['quads']):
         red = i >= 14
         _outline(d, quad, (255, 54, 48, 230) if red else (255, 255, 255, 110), 2 if red else 1)
-    d.text((spec['kmh']['x'], spec['kmh']['y']), spec['kmh']['text'], font=font, fill=muted, anchor='lt')
+    kmh = spec['kmh']
+    d.text((kmh['x'], kmh['y']), kmh['text'], font=_font(kmh['size']), fill=muted, anchor=kmh['anchor'])
     label = spec['rpm_label']
     d.text((label['x'], label['y']), label['text'], font=font, fill=MUTED + (label['alpha'],), anchor=label['anchor'])
     for icon in spec['icons']:
         ICONS[icon['id']](d, icon['x'], icon['y'], icon['s'], muted)
     out = Image.alpha_composite(base, ov)
+    _fade_bottom(out, BOTTOM_FADE_Y)
     os.makedirs(OUT, exist_ok=True)
     raw = out.tobytes()
     if len(raw) != PHOTO_W * PHOTO_H * 4:

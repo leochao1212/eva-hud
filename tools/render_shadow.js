@@ -198,19 +198,8 @@ function frame() {
             if (buf) over(dst, l.x, l.y, buf, l.iw, l.ih);
         } else if (l.kind === 'effect') paintBar(dst, l);
     });
-    // continue the photo's last row through the BMW band so the preview has no seam
-    const photo = layers.find((l) => l.iw === W && l.ih === PHOTO_H);
-    if (photo) {
-        for (let y = photo.y + photo.ih; y < H; y++) {
-            for (let x = 0; x < W; x++) {
-                const s = ((photo.ih - 1) * W + x) * 4;
-                const di = (y * W + x) * 4;
-                const src = client.buffers.get(photo.ref);
-                if (!src) continue;
-                dst[di] = src[s]; dst[di + 1] = src[s + 1]; dst[di + 2] = src[s + 2]; dst[di + 3] = 255;
-            }
-        }
-    }
+    // y=636-720 stays the black the buffer was cleared to. The photo fades to that
+    // black in its last rows, so there is no seam and no smeared last-row copy.
     return dst;
 }
 
