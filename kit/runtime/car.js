@@ -12,7 +12,7 @@
  * "config.scaling" entries override them. The app's app.json "signals" must
  * list the interfaces (see SIGNALS below for the exact entries).
  * Demo: setting "demo" = auto (until the car answers) / on / off.
- * data().stage = the selector position 'P' / 'R' / 'N' / 'D' (gearbox signal), else undefined.
+ * data().stage = selector 'P' / 'R' / 'N' / 'D', or a named 'M' / 'S' report, else undefined.
  * data().condition = BMW's vehicle state number ('condition' group; 10 = drive-ready), else undefined.
  */
 const Sim = require('./sim');
@@ -30,7 +30,8 @@ const GEARS = { G1: 1, G2: 2, G3: 3, G4: 4, G5: 5, G6: 6, G7: 7, G8: 8, G9: 9, G
 const gearOf = (x) => (typeof x === 'number' ? (x >= 3 && x <= 12 ? x - 2 : x === 1 ? -1 : x === 2 ? 0 : undefined) : GEARS[x]);
 // selector position (statusActualStageDrive): names or wire numbers (P = 1, R = 2, N = 3, D = 4);
 // the gear field alone can't tell P from N (both N_OR_P)
-const STAGES = { P: 'P', R: 'R', N: 'N', D: 'D', 1: 'P', 2: 'R', 3: 'N', 4: 'D' };
+// Preserve explicit manual/sport names; do not guess undocumented wire numbers.
+const STAGES = { P: 'P', R: 'R', N: 'N', D: 'D', M: 'M', S: 'S', 1: 'P', 2: 'R', 3: 'N', 4: 'D' };
 const stageOf = (x) => STAGES[x];
 // VehicleCondition.statusConditionVehicle (BMW's vehicle state): names or wire numbers -> number.
 // 5 = WOHNEN (living, no ignition), 7 = PRUEFEN_ANALYSE_DIAGNOSE (ignition on), 8 = drive

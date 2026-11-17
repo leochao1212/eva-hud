@@ -1,85 +1,104 @@
 #!/usr/bin/env python3
-"""Bake the three Shadow drive-mode backgrounds for apps/shadow_dash.
+"""Bake the three Shadow drive-mode backgrounds.
 
-The source pictures live in tools/photos-src/{sport,comfort,eco}.png. The two-line slogan is part
-of each picture. This script scales the picture to 1920x640, lays one frosted strip under the
-slogan, and bakes the static labels and units into that strip. Only the live numbers are drawn
-by the app. Geometry is mirrored by tools/shadow_layout.py.
+Scales each source to width 1920 without stretching, then crops the same amount
+off the top and the bottom to 1920x640. The portrait and slogan stay. The dark
+right-hand side fades to black, and a slanted accent sits in that dark, left of
+the instruments. The app draws the numbers.
 
     python3 -X utf8 tools/make_photos.py
-
-Label fonts: SHADOW_ZH_FONT and SHADOW_EN_FONT, or the usual Windows / Linux paths.
 """
 import os
 import sys
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+from shadow_geom import ACCENT, BOTTOM_FADE_Y, NAVY, PHOTO_H, PHOTO_W, layout  # noqa: E402
+
 SRC = os.path.join(HERE, 'photos-src')
 OUT = os.path.join(HERE, '..', 'apps', 'shadow_dash', 'hud', 'photos')
 MODES = ('sport', 'comfort', 'eco')
-ACC = {'sport': (43, 232, 220), 'comfort': (46, 139, 255), 'eco': (245, 115, 26)}
-SUB = (182, 196, 210)
 
-# x, y, w, h of the frosted strip. shadow_layout.py's number boxes sit on the same strip.
-STRIP = (706, 498, 1198, 138)
-# per-cell label anchor (x, y) baked into the photo; numbers are widgets
-CELLS = [
-    ('時速', 722, 500), ('轉速', 1054, 500), ('檔位', 1302, 500), ('續航', 1500, 500), ('水溫', 1708, 500),
-]
-UNITS = [('km/h', 902, 582), ('RPM', 1054, 602), ('KM', 1628, 560), ('°C', 1834, 560)]
-
-ZH_CANDIDATES = [
-    os.environ.get('SHADOW_ZH_FONT'),
-    'C:/Windows/Fonts/msjhbd.ttc',
-    '/Library/Fonts/Microsoft JhengHei Bold.ttf',
-    '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
-    '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
-]
-EN_CANDIDATES = [
-    os.environ.get('SHADOW_EN_FONT'),
-    'C:/Windows/Fonts/arialbd.ttf',
-    '/Library/Fonts/Arial Bold.ttf',
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-]
+def fit_panel(im):
+    im = im.convert('RGBA')
+    w, h = im.size
+    nh = max(1, int(round(h * (PHOTO_W / float(w)))))
+    im = im.resize((PHOTO_W, nh), Image.LANCZOS)
+    if nh == PHOTO_H:
+        return im
+    if nh < PHOTO_H:
+        canvas = Image.new('RGBA', (PHOTO_W, PHOTO_H), (0, 0, 0, 255))
+        canvas.paste(im, (0, (PHOTO_H - nh) // 2))
+        return canvas
+    top = (nh - PHOTO_H) // 2
+    return im.crop((0, top, PHOTO_W, top + PHOTO_H))
 
 
-def _font(which, size, candidates):
-    for path in candidates:
-        if path and os.path.isfile(path):
-            return ImageFont.truetype(path, size)
-    raise SystemExit('No %s font. Set SHADOW_%s_FONT. Looked for:\n  %s' % (
-        which, 'ZH' if which == 'Chinese' else 'EN', '\n  '.join(p for p in candidates if p)))
+def _fade(im, x0, x1, strength):
+    """Darken toward black from x0 to the right edge. x1 is where it is fully dark."""
+    px = im.load()
+    w, h = im.size
+    span = max(1, x1 - x0)
+    for x in range(max(0, x0), w):
+        t = 1.0 if x >= x1 else (x - x0) / float(span)
+        t = t * t * (3 - 2 * t)
+        k = strength * t
+        if k <= 0:
+            continue
+        for y in range(h):
+            r, g, b, a = px[x, y]
+            px[x, y] = (int(r * (1 - k)), int(g * (1 - k)), int(b * (1 - k)), a)
 
 
-def build(mode, zh, en):
-    acc = ACC[mode]
+def _fade_bottom(im, y0, y_black=636):
+    """Fade to pure black by y_black. Rows from there down match the panel below the photo."""
+    px = im.load()
+    w, h = im.size
+    span = max(1, y_black - y0)
+    for y in range(max(0, y0), h):
+        if y >= y_black:
+            t = 1.0
+        else:
+            t = (y - y0) / float(span)
+            t = t * t * (3 - 2 * t)
+        if t <= 0:
+            continue
+        keep = 0 if t >= 1 else (1 - t)
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            px[x, y] = (int(r * keep), int(g * keep), int(b * keep), a)
+
+
+def build(mode):
     src = os.path.join(SRC, mode + '.png')
     if not os.path.isfile(src):
         raise SystemExit('missing %s' % src)
-    base = Image.open(src).convert('RGBA').resize((1920, 720), Image.LANCZOS).crop((0, 0, 1920, 640))
-    ov = Image.new('RGBA', (1920, 640), (0, 0, 0, 0))
+    base = fit_panel(Image.open(src))
+    spec = layout(mode)
+    speed = next(p for p in spec['parts'] if p['id'] == 'spd')
+    # fully black by the time the instruments start, so the panel below the photo matches
+    _fade(base, spec['fade'], speed['x'] - 8, 1.0)
+    ov = Image.new('RGBA', (PHOTO_W, PHOTO_H), (0, 0, 0, 0))
     d = ImageDraw.Draw(ov)
-    x, y, w, h = STRIP
-    d.rounded_rectangle([x, y, x + w, y + h], radius=16, fill=(5, 8, 13, 170))
-    d.rounded_rectangle([x, y, x + w, y + 5], radius=2, fill=acc + (255,))
-    for label, lx, ly in CELLS:
-        d.text((lx, ly), label, font=zh, fill=acc + (255,))
-    for text, ux, uy in UNITS:
-        d.text((ux, uy), text, font=en, fill=SUB + (255,))
+    st = spec['stripe']
+    sx, sy, sw, sh, slant = st['x'], st['y'], st['w'], st['h'], st['slant']
+    band = [(sx, sy + sh), (sx + sw, sy + sh), (sx + sw + slant, sy), (sx + slant, sy)]
+    # owner removed the slanted accent on every mode
     out = Image.alpha_composite(base, ov)
+    _fade_bottom(out, BOTTOM_FADE_Y)
     os.makedirs(OUT, exist_ok=True)
     raw = out.tobytes()
+    if len(raw) != PHOTO_W * PHOTO_H * 4:
+        raise SystemExit('%s rgba is %d bytes' % (mode, len(raw)))
     open(os.path.join(OUT, mode + '.rgba'), 'wb').write(raw)
-    print(mode, 'ok', len(raw))
+    print(mode, 'ok', 'speed', speed['x'], speed['y'], speed['w'], speed['h'])
 
 
 def main():
-    zh = _font('Chinese', 26, ZH_CANDIDATES)
-    en = _font('Latin', 17, EN_CANDIDATES)
     for mode in MODES:
-        build(mode, zh, en)
+        build(mode)
 
 
 if __name__ == '__main__':

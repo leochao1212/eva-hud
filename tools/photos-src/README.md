@@ -8,8 +8,10 @@ Drop the three source pictures here, then run `sh tools/build_shadow.sh` from th
 | `comfort.png` | Comfort |
 | `eco.png` | Eco Pro |
 
-Each file is the full cluster art. The two-line slogan is part of the picture (it is not drawn by the baker). Replace the PNG to change the slogan, the portrait, or the background.
+The pictures shipped here are the default Puma Shen set (2048×768). Each one keeps the portrait and the two-line slogan on the left and an empty dark area on the right. Replace a PNG to use a customer's own art. The slogan is part of the picture; the baker does not draw it.
 
-`tools/make_photos.py` scales each PNG to 1920×640 and bakes the data strip under the slogan: the labels in `CELLS` (時速, 轉速, 檔位, 續航, 水溫) and the units in `UNITS`. Edit those two lists in `make_photos.py` if a customer wants different strip words. The live speed, rpm, gear, range and coolant are not baked; the app draws them on top.
+`tools/make_photos.py` scales each PNG to the cluster width without stretching, crops the same amount off the top and the bottom to 1920×640, and bakes the fade to black plus the slanted accent into the dark area. Positions are `tools/shadow_geom.py`. The app draws the column with EVA's atlases: the speed, the unit, the rev segments, the gear and the small readouts. The bottom 84px of the 720px panel stays clear for BMW's warning icons.
 
-The script writes `apps/shadow_dash/hud/photos/<mode>.rgba` and the layouts under `apps/shadow_dash/hud/layouts/`. Label fonts default to Microsoft JhengHei Bold and Arial Bold on Windows. Elsewhere set `SHADOW_ZH_FONT` and `SHADOW_EN_FONT` to a `.ttf` or `.ttc`.
+The script writes `apps/shadow_dash/hud/photos/<mode>.rgba` and `tools/shadow_layout.py` writes the layouts. Units use EVA's `d_unit` atlas (Barlow Condensed SemiBold). The transparent instrument canvas adds the bilingual labels, hazard strip and bracket frame without rebaking or changing the photos.
+
+For a real-atlas preview, run `python tools/bake_shadow_preview_fonts.py`, build `shadow_dash`, then run `node tools/render_shadow.js dist/shadow-preview --stills-only`. It exports the three 1920×720 PNGs and their `*-right-2x.png` crops. All font atlases and build/preview output stay gitignored. See [the design notes](../../docs/shadow-eva.md).

@@ -78,38 +78,31 @@ const THEMES = {
         ok: [84, 224, 143, 255], okSoft: [159, 217, 184, 255], waitSoft: [255, 217, 138, 255], no: [255, 59, 47, 255], noSoft: [255, 177, 170, 255], blue: [120, 205, 255, 255],
         rule: [120, 205, 255, 90], black: [0, 0, 0, 255], amber: [255, 176, 0, 255], white: [255, 255, 255, 255], live: [255, 255, 255, 215], alert: [255, 17, 0, 255],
     },
-    // Shadow dash: a drive-mode photo fills the cluster; numbers are white, labels and accents take the mode's colour.
-    shadow_sport: {
-        name: 'Shadow Sport',
-        fg: [243, 246, 250, 255], dim: [243, 246, 250, 160], track: [43, 232, 220, 40], arc: [43, 232, 220, 255],
-        glow: 0.45, stripe: false,
-        bar: { low: [43, 232, 220], mid: [245, 197, 24], high: [255, 60, 60], midAt: 0.65 },
-        rev: { from: [43, 232, 220], to: [43, 232, 220] },
-        accent: [43, 232, 220, 255], tag: [43, 232, 220, 255], sub: [176, 196, 206, 255], faint: [43, 232, 220, 46], wire: [43, 232, 220, 120],
-        rule: [43, 232, 220, 110], black: [0, 0, 0, 255], white: [255, 255, 255, 255], amber: [245, 197, 24, 255], alert: [255, 60, 60, 255],
-    },
-    shadow_comfort: {
-        name: 'Shadow Comfort',
-        fg: [243, 246, 250, 255], dim: [243, 246, 250, 160], track: [46, 139, 255, 40], arc: [46, 139, 255, 255],
-        glow: 0.45, stripe: false,
-        bar: { low: [46, 139, 255], mid: [127, 180, 255], high: [255, 200, 90], midAt: 0.7 },
-        rev: { from: [46, 139, 255], to: [46, 139, 255] },
-        accent: [46, 139, 255, 255], tag: [96, 170, 255, 255], sub: [176, 196, 214, 255], faint: [46, 139, 255, 46], wire: [46, 139, 255, 120],
-        rule: [46, 139, 255, 110], black: [0, 0, 0, 255], white: [255, 255, 255, 255], amber: [245, 197, 24, 255], alert: [255, 60, 60, 255],
-    },
-    shadow_eco: {
-        name: 'Shadow Eco Pro',
-        fg: [243, 246, 250, 255], dim: [243, 246, 250, 160], track: [245, 115, 26, 40], arc: [245, 115, 26, 255],
-        glow: 0.45, stripe: false,
-        bar: { low: [245, 115, 26], mid: [255, 176, 102], high: [255, 210, 120], midAt: 0.7 },
-        rev: { from: [245, 115, 26], to: [245, 115, 26] },
-        accent: [245, 115, 26, 255], tag: [255, 150, 70, 255], sub: [206, 186, 170, 255], faint: [245, 115, 26, 46], wire: [245, 115, 26, 120],
-        rule: [245, 115, 26, 110], black: [0, 0, 0, 255], white: [255, 255, 255, 255], amber: [245, 197, 24, 255], alert: [255, 60, 60, 255],
-    },
+
 };
+// Shadow uses EVA's red/yellow midpoint, darkened 15%, with a 26/255 blue
+// floor to soften saturation: [217,101,26] = #D9651A. No cream text roles.
+const shadowInk = THEMES.eva.bar.mid.map((v, i) => Math.round((v + THEMES.eva.bar.high[i]) * 0.5 * 0.85));
+shadowInk[2] = 26;
+['sport', 'comfort', 'eco'].forEach((mode) => {
+    const dim = shadowInk.map((v) => Math.round(v * 0.88)); // #BF5917
+    const accent = [255, 106, 0];
+    const rest = mode === 'comfort' ? [20, 40, 75, 150] : shadowInk.concat(46);
+    THEMES['shadow_' + mode] = {
+        name: 'Shadow ' + (mode === 'eco' ? 'Eco Pro' : mode[0].toUpperCase() + mode.slice(1)),
+        fg: shadowInk.concat(255), dim: dim.concat(255), sub: dim.concat(255),
+        white: shadowInk.concat(255), amber: shadowInk.concat(255),
+        track: rest, arc: accent.concat(255), glow: 0.14, stripe: false,
+        accent: accent.concat(255), tag: shadowInk.concat(255),
+        faint: rest, wire: accent.concat(100), rule: accent.concat(135), black: [0, 0, 0, 255],
+        bar: { low: shadowInk, mid: shadowInk, high: THEMES.eva.bar.high, midAt: 0.875 },
+        rev: { from: shadowInk, to: shadowInk }, alert: shadowInk.concat(255),
+    };
+});
 // every theme: the shift-point red, used by "hot" (the gear and SHIFT at the shift point, the rev bar past it)
 Object.keys(THEMES).forEach((k) => { THEMES[k].hot = [255, 42, 42, 255]; });
 THEMES.eva.hot = [255, 17, 0, 255];
+['sport', 'comfort', 'eco'].forEach((mode) => { THEMES['shadow_' + mode].hot = THEMES.eva.hot; });
 // the dash's Comfort designs: the battle display's orange for labels and lines, white for what is read
 const ORANGE = [255, 136, 0];
 THEMES.eva_orange_white = Object.assign({}, THEMES.eva, {
