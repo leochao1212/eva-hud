@@ -19,8 +19,9 @@ const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 const load = (name) => JSON.parse(fs.readFileSync(path.join(HUD, 'layouts', name + '.json'), 'utf8'));
 
 const PHOTO_BYTES = 1920 * 640 * 4;
-const CLEAR_Y = 636;   // instruments stay above the covered status row
-const GEAR_WINDOW = [1196, 168, 228, 312];   // stock kombi gear box, right of centre
+const CLEAR_Y = 636;   // instruments stay above BMW's bottom strip
+// BMW's gear letter in the bottom strip. Covering it makes the kombi paint a black box on top.
+const GEAR_LETTER = [1380, 660, 80, 60];
 // art ends left of these x values on the cropped 1920x640 photo
 const SAFE_X = { sport: 1190, comfort: 1270, eco: 1460 };
 const READINGS = {
@@ -59,8 +60,7 @@ function layoutTests() {
             const speed = canvas.parts.find((p) => p.id === 'spd');
             const gear = layout.widgets.find((w) => w.type === 'evagear');
             assert.ok(segs && segs.count === 32 && segs.redFrom === 28, 'exact 7000 rpm redline');
-            assert.strictEqual(canvas.x + segs.x + segs.w, 1896, 'rpm bar runs to the right edge of the data field');
-            assert.ok(canvas.x + segs.x >= GEAR_WINDOW[0] + GEAR_WINDOW[2], 'rpm bar stays out of the gear window');
+            assert.strictEqual(segs.w, canvas.w, 'rpm bar uses the full data field');
             assert.ok(segs.h >= 30, 'rpm bar is readable');
             assert.ok(!canvas.parts.some((p) => p.type === 'badge'), 'no filled gear badge');
             assert.ok(speed && speed.glow && speed.offsetY >= 18 && speed.font === SPEED_FONT[mode], 'speed atlas');
@@ -68,30 +68,17 @@ function layoutTests() {
             assert.strictEqual(canvas.parts.find((p) => p.id === 'spd_l').font, 'd_label');
             assert.strictEqual(canvas.parts.find((p) => p.id === 'spd_u').font, 'd_unit');
             assert.ok(gear && gear.driveLetter && gear.fontPrefix === '', 'EVA gear with drive letter');
-            assert.deepStrictEqual([gear.x, gear.y, gear.w, gear.h],
-                [GEAR_WINDOW[0] + 14, GEAR_WINDOW[1] + 48, GEAR_WINDOW[2] - 28, GEAR_WINDOW[3] - 96],
-                'drive letter sits in the stock gear window');
-            const strip = layout.widgets.find((w) => w.id === 'strip');
-            assert.ok(strip && strip.type === 'fill' && strip.color === 'black', 'bottom strip is a black fill');
-            assert.deepStrictEqual([strip.x, strip.y, strip.w, strip.h], [0, 640, 1920, 80], 'black covers y=640..720');
             assert.ok(canvas.parts.some((p) => p.type === 'hazard'), 'EVA hazard detail');
             assert.ok(canvas.parts.some((p) => p.text === '{{gearcapjp}}'), 'bilingual gear caption');
             const live = canvas.parts.filter((p) => p.text && READINGS[mode].indexOf(p.text) >= 0);
             assert.deepStrictEqual(live.map((p) => p.text), READINGS[mode]);
             assert.strictEqual(canvas.parts.filter((p) => /^s\d$/.test(p.id)).length, 0, 'the 0-8 ticks are gone');
-            const inWindow = (id) => id === 'gear' || id === 'gearcap' || id === 'gearjp' || /^f_/.test(id) || /^c\d/.test(id);
-            const boxes = [];
-            layout.widgets.filter((w) => w.id !== 'bg' && w.id !== 'strip' && w.id !== 'cv').forEach((w) => {
-                if (!inWindow(w.id)) boxes.push([w.x, w.y, w.w, w.h, w.id]);
-            });
-            canvas.parts.forEach((p) => {
-                if (!inWindow(p.id)) boxes.push([canvas.x + p.x, canvas.y + p.y, p.w, p.h, p.id]);
-            });
+            const boxes = layout.widgets.filter((w) => w.id !== 'bg' && w.id.indexOf('strip_') !== 0).map((w) => [w.x, w.y, w.w, w.h]);
+            canvas.parts.forEach((p) => boxes.push([canvas.x + p.x, canvas.y + p.y, p.w, p.h]));
             boxes.forEach((b) => {
-                assert.ok(b[0] >= SAFE_X[mode], mode + ' covers the art at x ' + b[0] + ' ' + b[4]);
-                assert.ok(b[0] >= GEAR_WINDOW[0] + GEAR_WINDOW[2], mode + ' data is under the gear box: ' + b[4]);
+                assert.ok(b[0] >= SAFE_X[mode], mode + ' covers the art at x ' + b[0]);
                 assert.ok(b[0] + b[2] <= 1920 && b[1] >= 0, mode + ' runs off the cluster');
-                assert.ok(b[1] + b[3] <= CLEAR_Y, mode + ' reaches the status row');
+                assert.ok(b[1] + b[3] <= CLEAR_Y, mode + ' reaches BMW\'s warning row');
             });
             const rgba = fs.readFileSync(path.join(HUD, 'photos', mode + '.rgba'));
             assert.strictEqual(rgba.length, PHOTO_BYTES);
@@ -100,42 +87,24 @@ function layoutTests() {
             }
         };
     });
-    tests['the Eco slogan ends left of the stock gear window'] = () => {
-        const rgba = fs.readFileSync(path.join(HUD, 'photos', 'eco.rgba'));
-        const W = 1920;
-        const gearL = GEAR_WINDOW[0];
-        const runs = [];
-        for (let y = 100; y < 400; y++) {
-            let left = -1;
-            let right = -1;
-            for (let x = 600; x < gearL + 80; x++) {
-                const i = (y * W + x) * 4;
-                const r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
-                const cream = r > 200 && g > 170 && b > 120;
-                const orange = r > 180 && b < 80 && r > g + 30 && g > 40;
-                if (cream || orange) {
-                    if (left < 0) left = x;
-                    right = x;
-                }
-            }
-            if (right >= 0) runs.push({ y: y, left: left, right: right });
-        }
-        const boxes = [];
-        runs.forEach((row) => {
-            const last = boxes[boxes.length - 1];
-            if (last && row.y - last.y1 <= 6) {
-                last.y1 = row.y;
-                last.x0 = Math.min(last.x0, row.left);
-                last.x1 = Math.max(last.x1, row.right);
-            } else boxes.push({ x0: row.left, x1: row.right, y0: row.y, y1: row.y });
-        });
-        const text = boxes.filter((b) => b.y1 - b.y0 >= 8 && b.x1 - b.x0 >= 40);
-        assert.ok(text.length >= 2, 'the Eco tag and slogan were not found');
-        text.forEach((b) => {
-            assert.ok(b.x1 < gearL - 40, 'Eco text reaches x ' + b.x1 + ', the gear window starts at ' + gearL);
-            const hits = b.x1 >= GEAR_WINDOW[0] && b.x0 < GEAR_WINDOW[0] + GEAR_WINDOW[2] &&
-                b.y1 >= GEAR_WINDOW[1] && b.y0 < GEAR_WINDOW[1] + GEAR_WINDOW[3];
-            assert.ok(!hits, 'an Eco text box intersects the gear window');
+    tests['the bottom strip is covered except for BMW\'s gear letter'] = () => {
+        const hits = (a, b) => a[0] < b[0] + b[2] && a[0] + a[2] > b[0] && a[1] < b[1] + b[3] && a[1] + a[3] > b[1];
+        ['sport', 'comfort', 'eco'].forEach((mode) => {
+            const layout = load('dash_shadow_' + mode);
+            const left = layout.widgets.find((w) => w.id === 'strip_l');
+            const right = layout.widgets.find((w) => w.id === 'strip_r');
+            assert.ok(left && right && left.type === 'fill' && right.type === 'fill', mode + ' strip covers');
+            assert.strictEqual(left.color, 'black');
+            assert.strictEqual(right.color, 'black');
+            assert.deepStrictEqual([left.x, left.y, left.w, left.h], [0, 660, 1380, 60]);
+            assert.deepStrictEqual([right.x, right.y, right.w, right.h], [1460, 660, 460, 60]);
+            const rects = [];
+            layout.widgets.forEach((w) => { if (w.id !== 'strip_l' && w.id !== 'strip_r') rects.push([w.x, w.y, w.w, w.h, w.id]); });
+            const canvas = layout.widgets.find((w) => w.type === 'evacanvas');
+            canvas.parts.forEach((p) => rects.push([canvas.x + p.x, canvas.y + p.y, p.w, p.h, p.id]));
+            rects.forEach((r) => assert.ok(!hits(r, GEAR_LETTER), mode + ' ' + r[4] + ' covers the gear letter'));
+            const gear = layout.widgets.find((w) => w.type === 'evagear');
+            assert.ok(gear.x >= 1440, mode + ' gear is back in the right-hand column');
         });
     };
     tests['EVA no longer ships the Shadow photos or the Shadow menu row'] = () => {
@@ -227,7 +196,7 @@ function runtimeTests() {
             assert.strictEqual(dash.target, 'panel');
             assert.strictEqual(dash.activeName, 'shadow_comfort');
             assert.deepStrictEqual(client.targets(), ['panel']);
-            assert.strictEqual(client.layers.size, 4);
+            assert.strictEqual(client.layers.size, 5);
             const photo = Array.from(client.layers.values()).find((l) => l.iw === 1920 && l.ih === 640);
             assert.ok(photo, 'no full-cluster photo');
             const sent = client.sent.find((s) => s.ref && client.layers.get(s.ref) === photo);

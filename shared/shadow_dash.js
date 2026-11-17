@@ -8,10 +8,10 @@
  * no full-screen alerts: a saved EVA "shadow" design is not this app's problem.
  *
  * The three photos and the layouts live in this app's hud/ (tools/make_photos.py, tools/shadow_layout.py).
- * Instruments sit in the dark area on the right of each photo. The drive letter is placed in the
- * stock gear window (x 1196-1424): the kombi draws that box above every cluster-render layer, and
- * neither z nor exclusive can hide it. A black fill covers the status row from y=640. The seat-belt
- * lamp is drawn by the kombi after us, so it stays visible. Glyphs are EVA's atlases, drawn 1:1.
+ * Instruments sit in the dark area on the right of each photo, in EVA's type. The kombi paints a
+ * black box over the theme when a layer covers the gear letter in its bottom strip, so that
+ * letter (x 1380-1460, y 660-720) is left open and the rest of the strip is black. Glyphs are
+ * EVA's atlases, drawn at their own size.
  */
 const EvaHud = require('./eva_hud');
 const textRaster = require('./hud_text');

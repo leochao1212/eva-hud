@@ -1,4 +1,4 @@
-# Shadow 1.4.0 EVA instruments
+# Shadow 1.4.1 EVA instruments
 
 The right field follows EVA's `build_sq_sport` gear frame and bilingual captions,
 `build_square` speed/unit hierarchy, and `EVAHAZARD` diagonal 36px stripe pitch.
@@ -17,10 +17,12 @@ Sport and Comfort put RANGE, WATER / 水温, and TIME captions above three separ
 readings. Eco reserves the entire 412px field for its RPM bar, stacks the large
 gear frame beside range and time, and retains space for a three-digit speed.
 The gear shows the actual D/M/S drive letter and numeral, or P/R/N alone, including
-while stopped, and it sits in the stock kombi window at x 1196–1424. That window
-is composited above cluster-render, so z and exclusive cannot hide it. A black
-fill covers y=640–720. The seat-belt lamp stays, because the kombi draws it after
-every layer. The gear inherits neither shift-point red nor animated glyph scaling.
+while stopped. It inherits neither shift-point red nor animated glyph scaling.
+
+The bottom status row is black except x 1380–1460, y 660–720. That cell is BMW's
+gear letter. Covering the letter is what makes the kombi paint a black box on
+top of the theme (Cluster Themes `minimal.json`, the same coordinates). The
+seat-belt lamp is drawn by the kombi above the panel and stays visible.
 
 Real, unscaled atlases used: `sq_speed`, `sqs_speed`, `gear`, `b_gear`, `d_aen`,
 `d_line`, `d_label`, `d_unit`, `d_num42`, `sqs_num64`, `time70`. The preview font
