@@ -17,7 +17,10 @@ Sport and Comfort put RANGE, WATER / 水温, and TIME captions above three separ
 readings. Eco reserves the entire 412px field for its RPM bar, stacks the large
 gear frame beside range and time, and retains space for a three-digit speed.
 The gear shows the actual D/M/S drive letter and numeral, or P/R/N alone, including
-while stopped. It inherits neither shift-point red nor animated glyph scaling.
+while stopped, and it sits in the stock kombi window at x 1196–1424. That window
+is composited above cluster-render, so z and exclusive cannot hide it. A black
+fill covers y=640–720. The seat-belt lamp stays, because the kombi draws it after
+every layer. The gear inherits neither shift-point red nor animated glyph scaling.
 
 Real, unscaled atlases used: `sq_speed`, `sqs_speed`, `gear`, `b_gear`, `d_aen`,
 `d_line`, `d_label`, `d_unit`, `d_num42`, `sqs_num64`, `time70`. The preview font
