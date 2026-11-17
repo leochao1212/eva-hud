@@ -12,4 +12,6 @@ The pictures shipped here are the default Puma Shen set (2048×768). Each one ke
 
 `tools/make_photos.py` scales each PNG to the cluster width without stretching, crops the same amount off the top and the bottom to 1920×640, and bakes the fade to black plus the slanted accent into the dark area. Positions are `tools/shadow_geom.py`. The app draws the column with EVA's atlases: the speed, the unit, the rev segments, the gear and the small readouts. The bottom 84px of the 720px panel stays clear for BMW's warning icons.
 
-The script writes `apps/shadow_dash/hud/photos/<mode>.rgba` and `tools/shadow_layout.py` writes the layouts. The unit font is Arial Bold or DejaVu Sans Bold, or `SHADOW_EN_FONT`.
+The script writes `apps/shadow_dash/hud/photos/<mode>.rgba` and `tools/shadow_layout.py` writes the layouts. Units use EVA's `d_unit` atlas (Barlow Condensed SemiBold). The transparent instrument canvas adds the bilingual labels, hazard strip and bracket frame without rebaking or changing the photos.
+
+For a real-atlas preview, run `python tools/bake_shadow_preview_fonts.py`, build `shadow_dash`, then run `node tools/render_shadow.js dist/shadow-preview --stills-only`. It exports the three 1920×720 PNGs and their `*-right-2x.png` crops. All font atlases and build/preview output stay gitignored. See [the design notes](../../docs/shadow-eva.md).

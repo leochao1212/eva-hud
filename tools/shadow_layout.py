@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Generate the Shadow dash layouts into apps/shadow_dash.
 
-The photo holds the fade and the slanted accent. This file places the EVA-style
-column: labels, the speed, the unit, the rev segments, the rpm, the gear and
-the small readouts.
+The unchanged photo holds the fade and slanted accent. This file places EVA's
+bilingual captions, hazard strip, fine frame with heavy corners, speed/unit,
+full-width segmented rpm bar, drive-letter gear, and spaced small readouts.
+All decoration is transparent canvas material in the existing dark field.
 
     python3 -X utf8 tools/shadow_layout.py
 """

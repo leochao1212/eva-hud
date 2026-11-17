@@ -85,9 +85,7 @@ def build(mode):
     st = spec['stripe']
     sx, sy, sw, sh, slant = st['x'], st['y'], st['w'], st['h'], st['slant']
     band = [(sx, sy + sh), (sx + sw, sy + sh), (sx + sw + slant, sy), (sx + slant, sy)]
-    if mode == 'comfort':
-        d.polygon([(p[0] - 6, p[1]) for p in band], fill=NAVY + (255,))
-    d.polygon(band, fill=ACCENT[mode] + (255,))
+    # owner removed the slanted accent on every mode
     out = Image.alpha_composite(base, ov)
     _fade_bottom(out, BOTTOM_FADE_Y)
     os.makedirs(OUT, exist_ok=True)

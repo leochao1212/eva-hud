@@ -6,9 +6,10 @@
  *
  * The glyphs are the EVA atlases linked from apps/eva_hud/hud/fonts (gitignored).
  *
- *   node tools/render_shadow.js [outDir]
+ *   node tools/render_shadow.js [outDir] [--stills-only]
  */
 const { execFileSync } = require('child_process');
+const assert = require('assert');
 const fs = require('fs');
 const Module = require('module');
 const os = require('os');
@@ -16,7 +17,8 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const STAGE = path.join(ROOT, 'dist', 'shadow_dash');
-const OUT = process.argv[2] || path.join(ROOT, 'dist', 'shadow-preview');
+const OUT = process.argv.slice(2).find((s) => !s.startsWith('--')) || path.join(ROOT, 'dist', 'shadow-preview');
+const STILLS_ONLY = process.argv.includes('--stills-only');
 const W = 1920, H = 720, PHOTO_H = 640;
 
 class FakeClient {
@@ -88,7 +90,7 @@ function start(mode) {
     fs.writeFileSync(path.join(dataDir, 'settings.json'), JSON.stringify({
         demo: 'off', enabled: true, photoComfort: mode, photoSport: mode, photoEco: mode,
     }));
-    const log = { info() {}, warn() {}, error(s) { console.error(s); }, debug() {} };
+    const log = { info() {}, warn(s) { console.error(s); }, error(s) { console.error(s); }, debug() {} };
     const { headUnit } = require(path.join(ROOT, 'kit/tools/hu-stub.js'));
     const hu = headUnit(STAGE, { live: true, dataDir, log, image: () => Promise.resolve() });
     Object.keys(require.cache).filter((k) => k.indexOf(STAGE) === 0).forEach((k) => delete require.cache[k]);
@@ -235,7 +237,7 @@ function writeRaw(file, buf) { fs.writeFileSync(file, buf); }
 async function main() {
     fs.mkdirSync(OUT, { recursive: true });
     const frames = path.join(OUT, 'frames');
-    fs.mkdirSync(frames, { recursive: true });
+    if (!STILLS_ONLY) fs.mkdirSync(frames, { recursive: true });
     for (const mode of ['sport', 'comfort', 'eco']) {
         const hu = start(mode);
         await settle();
@@ -245,7 +247,26 @@ async function main() {
         show(MID);
         writeRaw(path.join(OUT, mode + '.rgba'), frame());
         console.log('still', mode);
-        if (mode === 'sport') {
+        // Exercise real gear atlases at every selector state, including the
+        // narrow Eco frame. A gear change must keep an empty, transparent edge.
+        const gear = Array.from(dash.widgets.values()).find((x) => x.w.type === 'evagear').w;
+        for (const stage of ['D', 'M', 'S', 'P', 'R', 'N', undefined]) {
+            for (const digit of [0, 4, 8]) {
+                dash.car.data = () => Object.assign({}, MID, { stage, gear: digit });
+                const px = dash._paintGear(gear, dash._gearFor());
+                assert.ok(px.some((v, i) => i % 4 === 3 && v > 0), 'blank gear '+stage+digit);
+                for (let y = 0; y < gear.h; y++) {
+                    assert.strictEqual(px[(y*gear.w)*4+3], 0, 'gear clipped left');
+                    assert.strictEqual(px[(y*gear.w+gear.w-1)*4+3], 0, 'gear clipped right');
+                }
+                for (let x = 0; x < gear.w; x++) {
+                    assert.strictEqual(px[x*4+3], 0, 'gear clipped top');
+                    assert.strictEqual(px[((gear.h-1)*gear.w+x)*4+3], 0, 'gear clipped bottom');
+                }
+            }
+        }
+        show(MID);
+        if (mode === 'sport' && !STILLS_ONLY) {
             for (let i = 0; i <= 80; i++) {
                 show(sample(i / 10));
                 writeRaw(path.join(frames, 'f' + String(i).padStart(3, '0') + '.rgba'), frame());
@@ -254,6 +275,8 @@ async function main() {
         }
         dash.stop();
     }
+    execFileSync(process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3'),
+        ['-X', 'utf8', path.join(__dirname, 'shadow_preview.py'), OUT], { stdio: 'inherit' });
 }
 
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });

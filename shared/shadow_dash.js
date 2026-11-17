@@ -13,6 +13,7 @@
  * holds the fade and the slanted accent. Glyphs are EVA's atlases, drawn at their own size.
  */
 const EvaHud = require('./eva_hud');
+const textRaster = require('./hud_text');
 
 const PHOTOS = ['sport', 'comfort', 'eco'];
 const PROFILE_KEY = { comfort: 'Comfort', sport: 'Sport', eco: 'Eco' };
@@ -74,11 +75,49 @@ class ShadowDash extends EvaHud {
 
     _popupSlot() { return POPUP_SLOT; }
 
-    /* The rev segments are painted here. Everything else is an ordinary EVA part or evagear. */
+    _token(key) {
+        if (key === 'clusterstatus') {
+            const stage = this._gearFor().text[0];
+            return 'SYSTEM // ' + ('PN-'.indexOf(stage) >= 0 ? '待命状態' : stage === 'R' ? '後退操作' : '同期中');
+        }
+        return EvaHud.prototype._token.call(this, key);
+    }
+
+    // A separate state kind avoids EVA's shift-point red, blink and scale pop.
+    // Only the 7000..8000 rpm segments may turn red, and all glyphs stay 1:1.
+    _gearFor() {
+        const d = this.car.data();
+        const stage = /^[DMPRNS]$/.test(d.stage) ? d.stage : d.gear === -1 ? 'R' : '-';
+        const digit = Number.isFinite(d.gear) && d.gear > 0 ? String(Math.min(9, Math.floor(d.gear))) : '';
+        return { kind: 'cluster', text: /^[DMS]$/.test(stage) ? stage + digit : stage === '-' ? digit || '-' : stage };
+    }
+
+    _paintGear(w, st) {
+        const driving = /^[DMS][1-9]$/.test(st.text);
+        const font = driving || /^[1-9]$/.test(st.text) ? 'gear' : /^[MS]$/.test(st.text) ? 'd_aen' : 'b_gear';
+        const letterFont = 'd_aen';
+        const glyph = driving ? st.text.slice(1) : st.text;
+        const mainWidth = textRaster.measure(glyph, font);
+        const letterWidth = driving ? textRaster.measure(st.text[0], letterFont) + 10 : 0;
+        const x = Math.round((w.w - mainWidth - letterWidth) / 2);
+        const cell = textRaster.loadFont(font).metrics.cellHeight;
+        const y = Math.round((w.h - cell) / 2);
+        const mask = textRaster.mask(w.w, w.h, glyph, { font, x: x + letterWidth, offsetY: y });
+        if (driving) {
+            const letter = textRaster.mask(w.w, w.h, st.text[0], {
+                font: letterFont, x, offsetY: y + cell - textRaster.loadFont(letterFont).metrics.cellHeight - 6,
+            });
+            for (let i = 0; i < mask.length; i++) mask[i] = Math.max(mask[i], letter[i]);
+        }
+        return textRaster.tint(mask, w.w, w.h, { font, color: this.theme.fg, glow: 0 });
+    }
+
+    /* Transparent hazard material and the live rev segments share EVA's canvas. */
     _partLook(p, now) {
+        if (p.type === 'hazard') return 'hazard';
         if (p.type === 'segs') {
             const rpm = this._raw('rpm');
-            const n = p.count || 28;
+            const n = p.count || 32;
             const lit = typeof rpm === 'number' && isFinite(rpm) ? Math.max(0, Math.min(n, Math.ceil(rpm / (8000 / n)))) : 0;
             return 'segs|' + lit;
         }
@@ -86,6 +125,16 @@ class ShadowDash extends EvaHud {
     }
 
     _partPixels(p, look) {
+        if (p.type === 'hazard') {
+            const buf = Buffer.alloc(p.w * p.h * 4);
+            const c = this.theme.accent;
+            for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) {
+                if ((x + y) % 36 >= 18) continue; // shaders.EVAHAZARD
+                const o = (y * p.w + x) * 4;
+                buf[o] = c[0]; buf[o+1] = c[1]; buf[o+2] = c[2]; buf[o+3] = 200;
+            }
+            return buf;
+        }
         if (p.type === 'segs') return this._paintSegs(p, Number(look.split('|')[1]) || 0);
         return EvaHud.prototype._partPixels.call(this, p, look);
     }
@@ -93,13 +142,13 @@ class ShadowDash extends EvaHud {
     /** Hard-edged segments, like EVA's rev bar. Red only once a segment in the 7-8k zone is lit. */
     _paintSegs(p, lit) {
         const buf = Buffer.alloc(p.w * p.h * 4);
-        const accent = this.theme.accent || this.theme.fg;
+        const accent = this.theme.fg;
         const hot = this.theme.hot || [255, 42, 42, 255];
         const rest = this.theme.track || accent;
         const quads = p.quads || [];
         for (let i = 0; i < quads.length; i++) {
             const on = i < lit;
-            const c = on && i >= (p.redFrom || 24) ? hot : on ? accent : rest;
+            const c = on && i >= p.redFrom ? hot : on ? accent : rest;
             fillQuad(buf, p.w, p.h, quads[i], [c[0], c[1], c[2], on ? 255 : (c[3] == null ? 46 : c[3])]);
         }
         return buf;

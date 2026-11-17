@@ -5,7 +5,7 @@
  *   node bench/test/shadow_dash_test.js
  */
 const assert = require('assert');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const Module = require('module');
 const os = require('os');
@@ -29,6 +29,12 @@ const READINGS = {
 };
 const SPEED_FONT = { sport: 'sq_speed', comfort: 'sqs_speed', eco: 'sqs_speed' };
 const RPM_FONT = { sport: 'd_num42', comfort: 'd_num42', eco: 'sqs_num64' };
+function build(hmi) {
+    return execFileSync(process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3'),
+        ['-X', 'utf8', 'kit/tools/build.py', 'shadow_dash'], {
+            cwd: ROOT, encoding: 'utf8', env: Object.assign({}, process.env, hmi ? { MGU_HMI: hmi } : {}),
+        });
+}
 
 function layoutTests() {
     const tests = {};
@@ -40,7 +46,8 @@ function layoutTests() {
             const theme = THEMES[layout.theme];
             assert.ok(theme, 'no theme ' + layout.theme);
             assert.ok(theme.accent[0] > 200 && theme.accent[1] < 160 && theme.accent[2] < 40, mode + ' accent is orange');
-            assert.deepStrictEqual(theme.fg.slice(0, 3), [245, 235, 220], mode + ' numbers are cream');
+            assert.deepStrictEqual(theme.fg.slice(0, 3), [217, 101, 26], mode + ' deep EVA amber');
+            assert.ok(theme.dim[0] < theme.fg[0] && theme.dim[1] < theme.fg[1], 'secondary text is dimmer');
             const photo = layout.widgets.find((w) => w.type === 'evaphoto');
             const canvas = layout.widgets.find((w) => w.type === 'evacanvas');
             assert.ok(photo && canvas, 'photo or canvas missing');
@@ -50,13 +57,17 @@ function layoutTests() {
             const segs = canvas.parts.find((p) => p.type === 'segs');
             const speed = canvas.parts.find((p) => p.id === 'spd');
             const gear = layout.widgets.find((w) => w.type === 'evagear');
-            assert.ok(segs && segs.count === 28 && segs.redFrom === 24, 'rpm segments');
+            assert.ok(segs && segs.count === 32 && segs.redFrom === 28, 'exact 7000 rpm redline');
+            assert.strictEqual(segs.w, canvas.w, 'rpm bar uses the full data field');
+            assert.ok(segs.h >= 30, 'rpm bar is readable');
             assert.ok(!canvas.parts.some((p) => p.type === 'badge'), 'no filled gear badge');
             assert.ok(speed && speed.glow && speed.offsetY >= 18 && speed.font === SPEED_FONT[mode], 'speed atlas');
             assert.strictEqual(canvas.parts.find((p) => p.id === 'rpm').font, RPM_FONT[mode]);
             assert.strictEqual(canvas.parts.find((p) => p.id === 'spd_l').font, 'd_label');
             assert.strictEqual(canvas.parts.find((p) => p.id === 'spd_u').font, 'd_unit');
-            assert.ok(gear && gear.fontPrefix === 'sq_' && gear.words, 'EVA gear');
+            assert.ok(gear && gear.driveLetter && gear.fontPrefix === '', 'EVA gear with drive letter');
+            assert.ok(canvas.parts.some((p) => p.type === 'hazard'), 'EVA hazard detail');
+            assert.ok(canvas.parts.some((p) => p.text === '{{gearcapjp}}'), 'bilingual gear caption');
             const live = canvas.parts.filter((p) => p.text && READINGS[mode].indexOf(p.text) >= 0);
             assert.deepStrictEqual(live.map((p) => p.text), READINGS[mode]);
             assert.strictEqual(canvas.parts.filter((p) => /^s\d$/.test(p.id)).length, 0, 'the 0-8 ticks are gone');
@@ -69,6 +80,9 @@ function layoutTests() {
             });
             const rgba = fs.readFileSync(path.join(HUD, 'photos', mode + '.rgba'));
             assert.strictEqual(rgba.length, PHOTO_BYTES);
+            for (let i = CLEAR_Y * 1920 * 4; i < rgba.length; i += 4) {
+                assert.strictEqual(rgba[i] | rgba[i+1] | rgba[i+2], 0, 'photo bottom must be pure black');
+            }
         };
     });
     tests['EVA no longer ships the Shadow photos or the Shadow menu row'] = () => {
@@ -80,7 +94,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.3.0');
+        assert.strictEqual(shadow.version, '1.4.0');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);
@@ -182,22 +196,56 @@ function runtimeTests() {
             dash.stop();
         },
         async 'an iDrive 8 build is refused'() {
-            const out = execSync('MGU_HMI=ID8 python3 kit/tools/build.py shadow_dash', { cwd: ROOT, encoding: 'utf8' });
+            const out = build('ID8');
             assert.ok(/iDrive 7 only, not built/.test(out), out);
             const spec = JSON.parse(fs.readFileSync(path.join(STAGE, 'source/javascript/kit/app-spec.json'), 'utf8'));
             assert.deepStrictEqual(spec.hmi, ['ID7']);
             assert.strictEqual(spec.id, 'shadow_dash');
         },
+        async 'drive letters survive shifts and red is reserved for the exact redline zone'() {
+            const a = startApp({});
+            await wait(SETTLE_MS);
+            const dash = a.dash();
+            try {
+                a.hu.feed('de.bmw.infrastructure.VehicleInformation', 'statusGearboxDrive', {
+                    statusActualStageDrive: 'M', statusActualGearDrive: 6,
+                });
+                assert.strictEqual(dash.car.data().stage, 'M', 'manual stage survives the vehicle parser');
+                assert.strictEqual(dash._gearFor().text, 'M4');
+                for (const stage of ['D', 'M', 'P', 'R', 'N']) {
+                    dash.car.data = () => ({ stage, gear: 4, speed: 96, rpm: 7800 });
+                    const st = dash._gearFor();
+                    assert.strictEqual(st.text, /^[DM]$/.test(stage) ? stage+'4' : stage);
+                    assert.strictEqual(st.kind, 'cluster', 'gear must not inherit shift red/blink/scale');
+                }
+                dash.car.data = () => ({ stage: 'D', gear: 1, speed: 0 });
+                assert.strictEqual(dash._gearFor().text, 'D1', 'drive letter also appears at rest');
+                dash.car.data = () => ({ gear: 4, speed: 96 });
+                assert.strictEqual(dash._gearFor().text, '4', 'a missing selector must not hide a known gear');
+                const p = load('dash_shadow_comfort').widgets.find((w) => w.type === 'evacanvas').parts.find((p) => p.type === 'segs');
+                for (const lit of [0, 19, 28, 29, 32]) {
+                    const pixels = dash._paintSegs(p, lit);
+                    let red = 0;
+                    for (let o = 0; o < pixels.length; o += 4) {
+                        if (pixels[o] === 255 && pixels[o+1] === 17 && pixels[o+2] === 0 && pixels[o+3]) {
+                            red++;
+                            assert.ok((o/4)%p.w >= p.w*0.875, 'red pixel before 7000 rpm');
+                        }
+                    }
+                    assert.strictEqual(red > 0, lit > 28, 'red only when a redline segment lights');
+                }
+            } finally { dash.stop(); }
+        },
     };
 }
 
 (async () => {
-    const skip = execSync('MGU_HMI=ID8 python3 kit/tools/build.py shadow_dash', { cwd: ROOT, encoding: 'utf8' });
+    const skip = build('ID8');
     if (!/iDrive 7 only, not built/.test(skip)) {
         console.log('FAIL  ID8 build was not skipped\n      ' + skip.split('\n')[0]);
         process.exit(1);
     }
-    execSync('python3 kit/tools/build.py shadow_dash', { cwd: ROOT, stdio: 'ignore' });
+    build();
     const tests = Object.assign(layoutTests(), runtimeTests());
     let failed = 0;
     for (const name of Object.keys(tests)) {
