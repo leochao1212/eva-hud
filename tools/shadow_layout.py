@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Generate the Shadow dash layouts (one per drive mode) into apps/shadow_dash.
+"""Generate the Shadow dash layouts into apps/shadow_dash.
 
-The photo fills the cluster. Captions and units are baked into the right-hand
-dark area (tools/make_photos.py, tools/shadow_geom.py). Live widgets are the
-speed, the rpm readout, the 0-8 rev bar, the gear, the range, the coolant and
-the time. Re-run this rather than editing the JSON by hand.
+The photo already holds the fade, the diagonal, the segment outlines, the icons
+and km/h. This file places only what changes: the speed, the lit segments, the
+gear badge, the rpm, the range, the coolant and the time.
 
     python3 -X utf8 tools/shadow_layout.py
 """
@@ -20,23 +19,20 @@ OUT = os.path.join(HERE, '..', 'apps', 'shadow_dash', 'hud', 'layouts')
 MODES = [('sport', 'shadow_sport'), ('comfort', 'shadow_comfort'), ('eco', 'shadow_eco')]
 
 
+def _part(p):
+    one = {k: p[k] for k in p if k != 'quads'}
+    if p.get('quads'):
+        one['quads'] = p['quads']
+    return one
+
+
 def build(photo, theme):
     spec = layout(photo)
     x, y, w, h = spec['block']
-    parts = []
-    for p in spec['parts']:
-        one = {'id': p['id'], 'type': 'text', 'text': p['text'], 'font': p['font'],
-               'x': p['x'], 'y': p['y'], 'w': p['w'], 'h': p['h'], 'align': p['align'], 'color': p['color']}
-        if p.get('glow'):
-            one['glow'] = True
-        parts.append(one)
-    bar = spec['bar']
+    parts = [_part(p) for p in spec['parts']]
     widgets = [
         {'id': 'bg', 'type': 'evaphoto', 'photo': photo, 'x': 0, 'y': 0, 'w': 1920, 'h': 640,
          'class': 'ambient', 'z': 0, 'keepInAlert': True},
-        {'id': 'revs', 'type': 'revbar', 'x': bar['x'], 'y': bar['y'], 'w': bar['w'], 'h': bar['h'],
-         'top': bar['top'], 'barH': bar['barH'], 'slant': bar['slant'], 'over': bar['over'],
-         'class': 'content', 'z': 4},
         {'id': 'cv', 'type': 'evacanvas', 'x': x, 'y': y, 'w': w, 'h': h,
          'class': 'overlay', 'z': 10, 'parts': parts},
     ]

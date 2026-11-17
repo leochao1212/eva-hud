@@ -37,17 +37,20 @@ function layoutTests() {
             assert.ok(theme.accent[0] > 200 && theme.accent[1] < 180 && theme.accent[2] < 80, mode + ' accent is orange');
             const photo = layout.widgets.find((w) => w.type === 'evaphoto');
             const canvas = layout.widgets.find((w) => w.type === 'evacanvas');
-            const bar = layout.widgets.find((w) => w.type === 'revbar');
-            assert.ok(photo && canvas && bar, 'photo, canvas or rev bar missing');
+            assert.ok(photo && canvas, 'photo or canvas missing');
+            assert.ok(!layout.widgets.some((w) => w.type === 'revbar'), 'the flat rpm bar is still there');
             assert.strictEqual(photo.photo, mode);
             assert.deepStrictEqual([photo.x, photo.y, photo.w, photo.h], [0, 0, 1920, 640]);
-            assert.strictEqual(bar.over, 1000, 'the bar runs to 8000 rpm');
-            assert.ok(bar.barH > 0);
-            const live = canvas.parts.filter((p) => p.text.indexOf('{{') === 0);
+            const segs = canvas.parts.find((p) => p.type === 'segs');
+            const badge = canvas.parts.find((p) => p.type === 'badge');
+            const speed = canvas.parts.find((p) => p.id === 'spd');
+            assert.ok(segs && segs.count === 16 && segs.redFrom === 14, 'rpm segments');
+            assert.ok(badge && badge.slant > 0, 'gear badge');
+            assert.ok(speed && speed.hero && speed.skew > 0 && speed.h >= 140, 'hero speed');
+            const live = canvas.parts.filter((p) => p.text && p.text.indexOf('{{') === 0);
             assert.deepStrictEqual(live.map((p) => p.text), READINGS);
-            live.forEach((p) => assert.strictEqual(p.font, FONTS[p.id], p.id));
-            assert.deepStrictEqual(canvas.parts.filter((p) => /^s\d$/.test(p.id)).map((p) => p.text),
-                ['0', '1', '2', '3', '4', '5', '6', '7', '8']);
+            live.filter((p) => p.type === 'text' || p.type === 'badge').forEach((p) => assert.strictEqual(p.font, FONTS[p.id], p.id));
+            assert.strictEqual(canvas.parts.filter((p) => /^s\d$/.test(p.id)).length, 0, 'the 0-8 ticks are gone');
             const boxes = layout.widgets.filter((w) => w.id !== 'bg').map((w) => [w.x, w.y, w.w, w.h]);
             canvas.parts.forEach((p) => boxes.push([canvas.x + p.x, canvas.y + p.y, p.w, p.h]));
             boxes.forEach((b) => {
@@ -68,7 +71,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.1.0');
+        assert.strictEqual(shadow.version, '1.2.0');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);
@@ -148,8 +151,7 @@ function runtimeTests() {
             assert.strictEqual(dash.target, 'panel');
             assert.strictEqual(dash.activeName, 'shadow_comfort');
             assert.deepStrictEqual(client.targets(), ['panel']);
-            assert.strictEqual(client.layers.size, 3);
-            assert.ok(Array.from(client.layers.values()).some((l) => l.kind === 'effect'), 'the rpm bar is missing');
+            assert.strictEqual(client.layers.size, 2);
             const photo = Array.from(client.layers.values()).find((l) => l.iw === 1920 && l.ih === 640);
             assert.ok(photo, 'no full-cluster photo');
             const sent = client.sent.find((s) => s.ref && client.layers.get(s.ref) === photo);

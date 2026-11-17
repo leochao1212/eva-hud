@@ -1,90 +1,134 @@
-"""Geometry shared by the Shadow photo baker and the layout generator.
+"""Geometry for the Shadow cluster.
 
-The cluster panel is 1920x720. The photo fills 1920x640 and stops there, so the
-bottom 84px (y >= 636) stays clear for BMW's warning icons. Each drive mode's
-art and slogan occupy the left; the instruments sit in the empty dark area on
-the right, and the three blocks start at different x because the art does.
+The photo is 1920x640 on a 1920x720 panel. Live widgets end at y=636 so the
+bottom 84px stays clear for BMW's warning icons. Art stays on the left; the
+instruments use only the dark field on the right.
+
+Static pieces (the fade, the diagonal stripe, segment outlines, icons, km/h)
+are baked into the photo. The app draws the speed, the lit segments, the gear
+badge and the three small readouts.
 """
 
 PHOTO_W, PHOTO_H = 1920, 640
 PANEL_H = 720
-CLEAR_Y = PANEL_H - 84  # 636: live widgets end here
+CLEAR_Y = PANEL_H - 84  # 636
 
-# (x, y, w, h) of the instrument block, measured off the cropped 1920x640 art
+# (x, y, w, h) of the instrument field. x is past each photo's art.
 BLOCKS = {
-    'sport': (1224, 16, 660, 600),
-    'comfort': (1344, 20, 540, 596),
-    'eco': (1512, 20, 372, 596),
+    'sport': (1224, 8, 672, 616),
+    'comfort': (1344, 12, 552, 612),
+    'eco': (1512, 12, 384, 612),
 }
 
-# Accent sampled from each photo. Comfort also carries a navy rule.
+# Where the photo starts dissolving into black. Left of the block, clear of the face.
+FADE = {'sport': 1040, 'comfort': 1160, 'eco': 1340}
+
 ACCENT = {
     'sport': (255, 92, 0),
     'comfort': (240, 112, 0),
     'eco': (255, 106, 0),
 }
-NAVY = (22, 42, 78)
-INK = (236, 240, 244)
-DIM = (186, 196, 208)
+NAVY = (18, 36, 72)
+INK = (255, 255, 255)
+MUTED = (255, 255, 255)  # baked at alpha 150, about 60%
+SEGMENTS = 16
+RED_FROM = 14            # 7000-8000 rpm, the last two thousands
+SLANT = 22               # px the top of a segment sits right of its bottom
+
+
+def _quads(x, y, w, h, slant, gap):
+    """Parallelograms, top edge shifted right by `slant`. w is the bottom run."""
+    pitch = w / float(SEGMENTS)
+    out = []
+    for i in range(SEGMENTS):
+        x0 = x + i * pitch
+        bl, br = x0 + gap * 0.5, x0 + pitch - gap * 0.5
+        out.append(((bl + slant, y), (br + slant, y), (br, y + h), (bl, y + h)))
+    return out
 
 
 def layout(mode):
-    """Absolute rectangles for one mode. Text parts are also returned relative to the block,
-    which is the evacanvas. Every live rect ends at or above CLEAR_Y."""
     x, y, w, h = BLOCKS[mode]
-    pad = 16 if w < 420 else 20
-    ix, iw = x + pad, w - 2 * pad
-    cy = y
+    pad = 18 if w > 420 else 12
+    ix, iw = x + pad, w - pad - 16
+    # A digit is about 0.72 of its height, three of them plus the shear must fit.
+    speed_h = int(min(h * 0.46, (iw * 0.90) / (3 * 0.72)))
+    speed_h = max(140, speed_h)
+    cy = y + 6
+    parts = [{
+        'id': 'spd', 'type': 'text', 'text': '{{speed}}', 'font': 'e_rpm', 'hero': True,
+        'x': ix - x, 'y': cy - y, 'w': iw, 'h': speed_h, 'align': 'left', 'color': 'fg', 'skew': 0.28,
+    }]
+    kmh = {'text': 'km/h', 'x': ix + int(speed_h * 1.15), 'y': cy + speed_h + 4, 'size': 22, 'color': MUTED, 'alpha': 170}
+    cy += speed_h + 36
 
-    def bake(text, bx, by, size, color):
-        return {'text': text, 'x': bx, 'y': by, 'size': size, 'color': color}
+    seg_h = 36 if w < 420 else 42
+    quads = _quads(ix, cy, iw - SLANT, seg_h, SLANT, 5)
+    # bounding box includes the slant
+    seg = {
+        'id': 'segs', 'type': 'segs', 'count': SEGMENTS, 'redFrom': RED_FROM, 'slant': SLANT, 'gap': 5,
+        'x': ix - x, 'y': cy - y, 'w': iw, 'h': seg_h,
+        'quads': [[[p[0] - ix, p[1] - cy] for p in q] for q in quads],
+    }
+    parts.append(seg)
+    parts.append({
+        'id': 'rpm', 'type': 'text', 'text': '{{rpm}}', 'font': 'e_num',
+        'x': ix + iw - 150 - x, 'y': cy + seg_h + 4 - y, 'w': 150, 'h': 32,
+        'align': 'right', 'color': 'dim',
+    })
+    cy += seg_h + 40
 
-    def live(i, text, font, lx, ly, lw, lh, color='fg', align='left'):
-        return {'id': i, 'type': 'text', 'text': text, 'font': font,
-                'x': lx - x, 'y': ly - y, 'w': lw, 'h': lh, 'align': align, 'color': color, 'glow': color == 'fg'}
+    badge_h = 92 if w >= 500 else 78
+    badge_w = min(210, iw // 2 + 20)
+    parts.append({
+        'id': 'gear', 'type': 'badge', 'text': '{{gear}}', 'font': 'b_gear',
+        'x': ix - x, 'y': cy - y, 'w': badge_w, 'h': badge_h, 'slant': 16,
+    })
+    cy += badge_h + 28
 
-    captions = [bake('SPEED', ix, cy + 2, 18, ACCENT[mode])]
-    cy += 24
-    speed_h = 118
-    speed_w = min(iw - 100, 250)
-    parts = [live('spd', '{{speed}}', 'e_rpm', ix, cy, speed_w, speed_h, 'fg', 'left')]
-    bakes = [bake('km/h', ix + speed_w + 10, cy + 68, 26, INK)]
-    cy += speed_h + 14
+    # one compact row: range, coolant, time. Time is the widest ("14:32").
+    row_h = 40
+    icon = 20 if iw < 420 else 24
+    if iw < 420:
+        slots = [108, 84, iw - 192]
+    else:
+        slots = [int(iw * 0.30), int(iw * 0.26), 0]
+        slots[2] = iw - slots[0] - slots[1]
+    acc = 0
+    icons = []
+    for key, token, font, slot in (
+        ('rng', '{{range}}', 'e_num', slots[0]),
+        ('wat', '{{coolant}}', 'e_num', slots[1]),
+        ('clk', '{{time}}', 'e3_time', slots[2]),
+    ):
+        sx = ix + acc
+        icons.append({'id': key, 'x': sx, 'y': cy + 6, 's': icon})
+        parts.append({
+            'id': key, 'type': 'text', 'text': token, 'font': font,
+            'x': sx + icon + 4 - x, 'y': cy - y, 'w': max(40, slot - icon - 6), 'h': row_h,
+            'align': 'left', 'color': 'dim',
+        })
+        acc += slot
+    # keep the row above BMW's icons even on the shortest block
+    if cy + row_h > CLEAR_Y:
+        raise SystemExit('%s footer runs into BMW\'s row (y %d)' % (mode, cy + row_h))
 
-    captions.append(bake('RPM', ix, cy + 6, 16, ACCENT[mode]))
-    parts.append(live('rpm', '{{rpm}}', 'e_num', ix + iw - 168, cy, 168, 40, 'fg', 'right'))
-    cy += 42
-    bar = {'x': ix, 'y': cy, 'w': iw, 'h': 70, 'top': 8, 'barH': 30, 'slant': 0, 'over': 1000}
-    cy += bar['h'] + 2
-    slot = iw / 9.0
-    for n in range(9):
-        parts.append(live('s%d' % n, str(n), 'e_num', int(ix + n * slot), cy, int(slot), 26,
-                          'hot' if n >= 7 else 'dim', 'center'))
-    cy += 32
-
-    col = iw // 2
-    captions.append(bake('GEAR', ix, cy, 15, DIM))
-    captions.append(bake('RANGE', ix + col, cy, 15, DIM))
-    cy += 20
-    parts.append(live('gear', '{{gear}}', 'b_gear', ix, cy, col - 8, 76, 'fg', 'left'))
-    parts.append(live('rng', '{{range}}', 'e_num', ix + col, cy + 16, col - 48, 52, 'fg', 'left'))
-    bakes.append(bake('km', ix + iw - 40, cy + 32, 18, INK))
-    cy += 82
-
-    captions.append(bake('TEMP', ix, cy, 15, DIM))
-    captions.append(bake('TIME', ix + col, cy, 15, DIM))
-    cy += 20
-    parts.append(live('wat', '{{coolant}}', 'e_num', ix, cy, col - 52, 52, 'fg', 'left'))
-    bakes.append(bake('°C', ix + col - 48, cy + 16, 18, INK))
-    parts.append(live('clk', '{{time}}', 'e3_time', ix + col, cy, col - 4, 52, 'fg', 'left'))
-
-    rects = [(x, y, w, h), (bar['x'], bar['y'], bar['w'], bar['h'])]
+    rects = []
     for p in parts:
         rects.append((x + p['x'], y + p['y'], p['w'], p['h']))
     for r in rects:
+        if r[1] < 0 or r[0] < x or r[0] + r[2] > x + w + 4:
+            raise SystemExit('%s part leaves the dark field: %s' % (mode, r))
         if r[1] + r[3] > CLEAR_Y:
-            raise SystemExit('%s instrument runs into BMW\'s row: %s' % (mode, r))
-        if r[0] < x or r[0] + r[2] > x + w:
-            raise SystemExit('%s instrument leaves its block: %s' % (mode, r))
+            raise SystemExit('%s part reaches BMW\'s row: %s' % (mode, r))
 
-    return {'block': (x, y, w, h), 'parts': parts, 'bar': bar, 'bakes': bakes + captions}
+    return {
+        'block': (x, y, w, h),
+        'fade': FADE[mode],
+        'parts': parts,
+        'quads': quads,
+        'kmh': kmh,
+        'icons': icons,
+        # a short brush slash at the top of the field, not a full-height wall
+        'stripe': {'x': x + 4, 'y': y + 10, 'w': 22, 'h': min(170, speed_h - 20), 'slant': 96},
+    }

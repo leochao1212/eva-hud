@@ -82,7 +82,7 @@ const THEMES = {
     // (sport orange, comfort orange with a navy track, eco orange). The rev bar runs 0-8000 rpm.
     shadow_sport: {
         name: 'Shadow Sport',
-        fg: [255, 255, 255, 255], dim: [255, 196, 160, 210], track: [255, 92, 0, 48], arc: [255, 92, 0, 255],
+        fg: [255, 255, 255, 255], dim: [255, 255, 255, 153], track: [255, 92, 0, 48], arc: [255, 92, 0, 255],
         glow: 0.35, stripe: false,
         bar: { low: [255, 140, 48], mid: [255, 92, 0], high: [255, 42, 42], midAt: 0.75 },
         rev: { from: [255, 150, 56], to: [255, 92, 0] },
@@ -91,7 +91,7 @@ const THEMES = {
     },
     shadow_comfort: {
         name: 'Shadow Comfort',
-        fg: [255, 255, 255, 255], dim: [255, 206, 170, 210], track: [36, 58, 96, 170], arc: [240, 112, 0, 255],
+        fg: [255, 255, 255, 255], dim: [255, 255, 255, 153], track: [36, 58, 96, 170], arc: [240, 112, 0, 255],
         glow: 0.35, stripe: false,
         bar: { low: [255, 168, 72], mid: [240, 112, 0], high: [255, 42, 42], midAt: 0.75 },
         rev: { from: [255, 176, 80], to: [240, 112, 0] },
@@ -100,7 +100,7 @@ const THEMES = {
     },
     shadow_eco: {
         name: 'Shadow Eco Pro',
-        fg: [255, 255, 255, 255], dim: [255, 196, 150, 210], track: [255, 106, 0, 48], arc: [255, 106, 0, 255],
+        fg: [255, 255, 255, 255], dim: [255, 255, 255, 153], track: [255, 106, 0, 48], arc: [255, 106, 0, 255],
         glow: 0.35, stripe: false,
         bar: { low: [255, 150, 48], mid: [255, 106, 0], high: [255, 42, 42], midAt: 0.75 },
         rev: { from: [255, 160, 64], to: [255, 106, 0] },
