@@ -8,7 +8,8 @@
  * no full-screen alerts: a saved EVA "shadow" design is not this app's problem.
  *
  * The three photos and the layouts live in this app's hud/ (tools/make_photos.py, tools/shadow_layout.py).
- * Number glyphs are the same atlases as EVA, linked from apps/eva_hud/hud/fonts at build time.
+ * Instruments sit in the dark area on the right of each photo. Number glyphs are the same atlases as EVA
+ * (e_rpm, e_num, b_gear, e3_time), linked from apps/eva_hud/hud/fonts at build time.
  */
 const EvaHud = require('./eva_hud');
 
@@ -34,6 +35,7 @@ class ShadowDash extends EvaHud {
         if (key === 'redline') return 7000;
         if (key === 'shiftBefore') return 300;
         if (key === 'coldGuard') return true;
+        if (key === 'gmtOffset') return 'unit';   // the clock on the cluster follows the head unit
         return EvaHud.prototype.setting.call(this, key);
     }
 

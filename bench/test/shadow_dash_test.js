@@ -19,28 +19,42 @@ const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 const load = (name) => JSON.parse(fs.readFileSync(path.join(HUD, 'layouts', name + '.json'), 'utf8'));
 
 const PHOTO_BYTES = 1920 * 640 * 4;
-const READINGS = ['{{speed}}', '{{rpm}}', '{{gear}}', '{{range}}', '{{coolant}}'];
-const FONTS = { spd: 'e_rpm', rpm: 'e_num', gear: 'b_gear', rng: 'e_num', wat: 'e_num' };
+const CLEAR_Y = 636;   // 720 - 84: BMW's warning row
+// art ends left of these x values on the cropped 1920x640 photo
+const SAFE_X = { sport: 1224, comfort: 1344, eco: 1512 };
+const READINGS = ['{{speed}}', '{{rpm}}', '{{gear}}', '{{range}}', '{{coolant}}', '{{time}}'];
+const FONTS = { spd: 'e_rpm', rpm: 'e_num', gear: 'b_gear', rng: 'e_num', wat: 'e_num', clk: 'e3_time' };
 
 function layoutTests() {
     const tests = {};
     ['sport', 'comfort', 'eco'].forEach((mode) => {
-        tests[mode + ' layout is a panel photo plus the five live numbers'] = () => {
+        tests[mode + ' layout keeps the instruments in the dark right-hand field'] = () => {
             const layout = load('dash_shadow_' + mode);
             assert.strictEqual(layout.schemaVersion, 2);
             assert.strictEqual(layout.theme, 'shadow_' + mode);
-            assert.ok(THEMES[layout.theme], 'no theme ' + layout.theme);
+            const theme = THEMES[layout.theme];
+            assert.ok(theme, 'no theme ' + layout.theme);
+            assert.ok(theme.accent[0] > 200 && theme.accent[1] < 180 && theme.accent[2] < 80, mode + ' accent is orange');
             const photo = layout.widgets.find((w) => w.type === 'evaphoto');
             const canvas = layout.widgets.find((w) => w.type === 'evacanvas');
-            assert.ok(photo && canvas);
+            const bar = layout.widgets.find((w) => w.type === 'revbar');
+            assert.ok(photo && canvas && bar, 'photo, canvas or rev bar missing');
             assert.strictEqual(photo.photo, mode);
             assert.deepStrictEqual([photo.x, photo.y, photo.w, photo.h], [0, 0, 1920, 640]);
-            layout.widgets.forEach((w) => {
-                assert.ok(w.x >= 0 && w.y >= 0 && w.x + w.w <= 1920 && w.y + w.h <= 720, w.id + ' runs off the cluster');
+            assert.strictEqual(bar.over, 1000, 'the bar runs to 8000 rpm');
+            assert.ok(bar.barH > 0);
+            const live = canvas.parts.filter((p) => p.text.indexOf('{{') === 0);
+            assert.deepStrictEqual(live.map((p) => p.text), READINGS);
+            live.forEach((p) => assert.strictEqual(p.font, FONTS[p.id], p.id));
+            assert.deepStrictEqual(canvas.parts.filter((p) => /^s\d$/.test(p.id)).map((p) => p.text),
+                ['0', '1', '2', '3', '4', '5', '6', '7', '8']);
+            const boxes = layout.widgets.filter((w) => w.id !== 'bg').map((w) => [w.x, w.y, w.w, w.h]);
+            canvas.parts.forEach((p) => boxes.push([canvas.x + p.x, canvas.y + p.y, p.w, p.h]));
+            boxes.forEach((b) => {
+                assert.ok(b[0] >= SAFE_X[mode], mode + ' covers the art at x ' + b[0]);
+                assert.ok(b[0] + b[2] <= 1920 && b[1] >= 0, mode + ' runs off the cluster');
+                assert.ok(b[1] + b[3] <= CLEAR_Y, mode + ' reaches BMW\'s warning row');
             });
-            const texts = canvas.parts.filter((p) => p.type === 'text').map((p) => p.text);
-            assert.deepStrictEqual(texts, READINGS);
-            canvas.parts.forEach((p) => assert.strictEqual(p.font, FONTS[p.id], p.id));
             const rgba = fs.readFileSync(path.join(HUD, 'photos', mode + '.rgba'));
             assert.strictEqual(rgba.length, PHOTO_BYTES);
         };
@@ -54,6 +68,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
+        assert.strictEqual(shadow.version, '1.1.0');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);
@@ -133,7 +148,8 @@ function runtimeTests() {
             assert.strictEqual(dash.target, 'panel');
             assert.strictEqual(dash.activeName, 'shadow_comfort');
             assert.deepStrictEqual(client.targets(), ['panel']);
-            assert.strictEqual(client.layers.size, 2);
+            assert.strictEqual(client.layers.size, 3);
+            assert.ok(Array.from(client.layers.values()).some((l) => l.kind === 'effect'), 'the rpm bar is missing');
             const photo = Array.from(client.layers.values()).find((l) => l.iw === 1920 && l.ih === 640);
             assert.ok(photo, 'no full-cluster photo');
             const sent = client.sent.find((s) => s.ref && client.layers.get(s.ref) === photo);

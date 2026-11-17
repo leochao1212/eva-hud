@@ -1,42 +1,28 @@
 #!/usr/bin/env python3
 """Bake the three Shadow drive-mode backgrounds for apps/shadow_dash.
 
-The source pictures live in tools/photos-src/{sport,comfort,eco}.png. The two-line slogan is part
-of each picture. This script scales the picture to 1920x640, lays one frosted strip under the
-slogan, and bakes the static labels and units into that strip. Only the live numbers are drawn
-by the app. Geometry is mirrored by tools/shadow_layout.py.
+Source pictures: tools/photos-src/{sport,comfort,eco}.png. They are scaled to the
+cluster width without stretching, then cropped evenly top and bottom to 1920x640.
+The two-line slogan stays part of the picture. Static captions and units are drawn
+in the empty right-hand area (tools/shadow_geom.py). The live numbers and the rpm
+bar are widgets.
 
     python3 -X utf8 tools/make_photos.py
 
-Label fonts: SHADOW_ZH_FONT and SHADOW_EN_FONT, or the usual Windows / Linux paths.
+Unit font: SHADOW_EN_FONT, else Arial Bold or DejaVu Sans Bold.
 """
 import os
 import sys
 
 from PIL import Image, ImageDraw, ImageFont
 
+from shadow_geom import ACCENT, BLOCKS, NAVY, PHOTO_H, PHOTO_W, layout
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, 'photos-src')
 OUT = os.path.join(HERE, '..', 'apps', 'shadow_dash', 'hud', 'photos')
 MODES = ('sport', 'comfort', 'eco')
-ACC = {'sport': (43, 232, 220), 'comfort': (46, 139, 255), 'eco': (245, 115, 26)}
-SUB = (182, 196, 210)
 
-# x, y, w, h of the frosted strip. shadow_layout.py's number boxes sit on the same strip.
-STRIP = (706, 498, 1198, 138)
-# per-cell label anchor (x, y) baked into the photo; numbers are widgets
-CELLS = [
-    ('時速', 722, 500), ('轉速', 1054, 500), ('檔位', 1302, 500), ('續航', 1500, 500), ('水溫', 1708, 500),
-]
-UNITS = [('km/h', 902, 582), ('RPM', 1054, 602), ('KM', 1628, 560), ('°C', 1834, 560)]
-
-ZH_CANDIDATES = [
-    os.environ.get('SHADOW_ZH_FONT'),
-    'C:/Windows/Fonts/msjhbd.ttc',
-    '/Library/Fonts/Microsoft JhengHei Bold.ttf',
-    '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
-    '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
-]
 EN_CANDIDATES = [
     os.environ.get('SHADOW_EN_FONT'),
     'C:/Windows/Fonts/arialbd.ttf',
@@ -45,42 +31,63 @@ EN_CANDIDATES = [
 ]
 
 
-def _font(which, size, candidates):
-    for path in candidates:
+def _font(size):
+    for path in EN_CANDIDATES:
         if path and os.path.isfile(path):
             return ImageFont.truetype(path, size)
-    raise SystemExit('No %s font. Set SHADOW_%s_FONT. Looked for:\n  %s' % (
-        which, 'ZH' if which == 'Chinese' else 'EN', '\n  '.join(p for p in candidates if p)))
+    raise SystemExit('No Latin font for the baked units. Set SHADOW_EN_FONT.\nLooked for:\n  %s' %
+                     '\n  '.join(p for p in EN_CANDIDATES if p))
 
 
-def build(mode, zh, en):
-    acc = ACC[mode]
+def fit_panel(im):
+    """Scale to width 1920, then crop top and bottom by the same amount to 640px."""
+    im = im.convert('RGBA')
+    w, h = im.size
+    nh = max(1, int(round(h * (PHOTO_W / float(w)))))
+    im = im.resize((PHOTO_W, nh), Image.LANCZOS)
+    if nh == PHOTO_H:
+        return im
+    if nh < PHOTO_H:
+        canvas = Image.new('RGBA', (PHOTO_W, PHOTO_H), (0, 0, 0, 255))
+        canvas.paste(im, (0, (PHOTO_H - nh) // 2))
+        return canvas
+    top = (nh - PHOTO_H) // 2
+    return im.crop((0, top, PHOTO_W, top + PHOTO_H))
+
+
+def build(mode, fonts):
     src = os.path.join(SRC, mode + '.png')
     if not os.path.isfile(src):
         raise SystemExit('missing %s' % src)
-    base = Image.open(src).convert('RGBA').resize((1920, 720), Image.LANCZOS).crop((0, 0, 1920, 640))
-    ov = Image.new('RGBA', (1920, 640), (0, 0, 0, 0))
+    base = fit_panel(Image.open(src))
+    spec = layout(mode)
+    x, y, w, h = spec['block']
+    ov = Image.new('RGBA', (PHOTO_W, PHOTO_H), (0, 0, 0, 0))
     d = ImageDraw.Draw(ov)
-    x, y, w, h = STRIP
-    d.rounded_rectangle([x, y, x + w, y + h], radius=16, fill=(5, 8, 13, 170))
-    d.rounded_rectangle([x, y, x + w, y + 5], radius=2, fill=acc + (255,))
-    for label, lx, ly in CELLS:
-        d.text((lx, ly), label, font=zh, fill=acc + (255,))
-    for text, ux, uy in UNITS:
-        d.text((ux, uy), text, font=en, fill=SUB + (255,))
+    # a light plate so the orange swirls never fight the numbers; the art is to the left of x
+    d.rounded_rectangle([x - 10, y - 6, x + w - 4, min(PHOTO_H - 8, y + h)], radius=16, fill=(0, 0, 0, 78))
+    acc = ACCENT[mode]
+    d.rounded_rectangle([x - 10, y - 6, x + w - 4, y - 1], radius=2, fill=acc + (255,))
+    if mode == 'comfort':
+        d.rectangle([x - 10, y + 2, x + w - 4, y + 5], fill=NAVY + (255,))
+    for item in spec['bakes']:
+        font = fonts.get(item['size']) or fonts.setdefault(item['size'], _font(item['size']))
+        d.text((item['x'], item['y']), item['text'], font=font, fill=item['color'] + (255,), anchor='lt')
     out = Image.alpha_composite(base, ov)
     os.makedirs(OUT, exist_ok=True)
     raw = out.tobytes()
+    if len(raw) != PHOTO_W * PHOTO_H * 4:
+        raise SystemExit('%s rgba is %d bytes' % (mode, len(raw)))
     open(os.path.join(OUT, mode + '.rgba'), 'wb').write(raw)
-    print(mode, 'ok', len(raw))
+    print(mode, 'ok', BLOCKS[mode])
 
 
 def main():
-    zh = _font('Chinese', 26, ZH_CANDIDATES)
-    en = _font('Latin', 17, EN_CANDIDATES)
+    fonts = {}
     for mode in MODES:
-        build(mode, zh, en)
+        build(mode, fonts)
 
 
 if __name__ == '__main__':
+    sys.path.insert(0, HERE)
     sys.exit(main() or 0)

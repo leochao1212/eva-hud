@@ -8,8 +8,8 @@ Drop the three source pictures here, then run `sh tools/build_shadow.sh` from th
 | `comfort.png` | Comfort |
 | `eco.png` | Eco Pro |
 
-Each file is the full cluster art. The two-line slogan is part of the picture (it is not drawn by the baker). Replace the PNG to change the slogan, the portrait, or the background.
+The pictures shipped here are the default Puma Shen set (2048×768). Each one keeps the portrait and the two-line slogan on the left and an empty dark area on the right. Replace a PNG to use a customer's own art. The slogan is part of the picture; the baker does not draw it.
 
-`tools/make_photos.py` scales each PNG to 1920×640 and bakes the data strip under the slogan: the labels in `CELLS` (時速, 轉速, 檔位, 續航, 水溫) and the units in `UNITS`. Edit those two lists in `make_photos.py` if a customer wants different strip words. The live speed, rpm, gear, range and coolant are not baked; the app draws them on top.
+`tools/make_photos.py` scales each PNG to the cluster width without stretching, crops the same amount off the top and the bottom to 1920×640, and bakes the captions and units (`km/h`, `km`, `°C`, SPEED, RPM, GEAR, RANGE, TEMP, TIME) into that dark area. The positions are `tools/shadow_geom.py`. The app draws the live speed, rpm bar (0–8 ×1000, red from 7), gear, range, coolant and time on top, and leaves the bottom 84px of the 720px panel clear for BMW's warning icons.
 
-The script writes `apps/shadow_dash/hud/photos/<mode>.rgba` and the layouts under `apps/shadow_dash/hud/layouts/`. Label fonts default to Microsoft JhengHei Bold and Arial Bold on Windows. Elsewhere set `SHADOW_ZH_FONT` and `SHADOW_EN_FONT` to a `.ttf` or `.ttc`.
+The script writes `apps/shadow_dash/hud/photos/<mode>.rgba` and `tools/shadow_layout.py` writes the layouts. The unit font is Arial Bold or DejaVu Sans Bold, or `SHADOW_EN_FONT`.

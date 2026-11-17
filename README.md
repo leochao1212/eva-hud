@@ -142,11 +142,11 @@ MATISSE=/path/to/MatissePro-EB.otf uv run --no-project --with pillow python tool
 - **EVA**（`apps/eva_hud`，应用 id `eva_hud`）：挡风玻璃 HUD 和 NERV 仪表。从 0.8.8 起不再带 Shadow 的照片。车上如果还存着仪表选项 `shadow`，会回到 Original（整块仪表）。
 - **Shadow**（`apps/shadow_dash`，应用 id `shadow_dash`，日志 id `SHDW`）：按驾驶模式换照片的整块仪表，只做 iDrive 7（ID7 MGU，cluster-render 的 `panel`，例如 2020 Z4 G29）。没有 ID8。它和 EVA 的应用 id、设置文件、cluster-render 客户端名字（`shadow_dash_cluster`）都不一样，可以装在同一台车上。Shadow 占整块仪表。EVA 如果也选了整块仪表的设计，两台里只有一台能画在 `panel` 上；EVA 的 HUD 和地图区设计可以同时开着。
 
-画面是车速、转速、档位、续航、水温，叠在当前驾驶模式的照片上。Comfort、Sport、Eco Pro 各用各的照片和颜色。车还没报告驾驶模式时按 Comfort。
+默认照片是沈伯洋主题的三张图，肖像和标语在左边，仪表在右边的暗部：大号车速和 km/h、0–8（×1000）转速条（7000 转起是红区）、档位、续航、水温、时间。Comfort、Sport、Eco Pro 各用各的照片，强调色跟照片走（橙色；Comfort 的转速条底是海军蓝）。最下面大约 84px 留给 BMW 自己的警告图标。车还没报告驾驶模式时按 Comfort。换客户的图就换 `tools/photos-src/` 里的三张 PNG。
 
 ### 给客户换图并构建
 
-三张原图放在 [tools/photos-src/](tools/photos-src/README.md)：`sport.png`、`comfort.png`、`eco.png`。两行标语是每张图自己的内容，换标语就换这张图。数据条上的标签和单位在 `tools/make_photos.py` 的 `CELLS` 和 `UNITS`。
+三张原图放在 [tools/photos-src/](tools/photos-src/README.md)：`sport.png`、`comfort.png`、`eco.png`。两行标语是每张图自己的内容，换标语就换这张图。右边暗部的标题和单位由 `tools/make_photos.py` 按 `tools/shadow_geom.py` 烤进去。
 
 数字用的字形和 EVA 相同，仓库里没有字体。先按上面的[字体](#字体)烘焙出 `apps/eva_hud/hud/fonts/`。构建脚本会把这个目录链到 Shadow；没有字形时照片能构建，数字是空的。
 
