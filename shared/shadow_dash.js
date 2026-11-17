@@ -96,19 +96,19 @@ class ShadowDash extends EvaHud {
         return EvaHud.prototype._partPixels.call(this, p, look);
     }
 
-    /** Scale the atlas up to the box and shear it so the top leans right. The atlas itself stays upright. */
+    /**
+     * The hero is the atlas at its own size, inset so the glow fades out before the quad edge.
+     * No upscale and no shear: an italic look comes from an italic atlas (the preview bakes
+     * DejaVu Bold Oblique at this size; on the car, e_rpm is whatever atlas was linked).
+     */
     _paintHero(p, look) {
         const cut = look.indexOf('|');
         const color = (cut < 0 ? look : look.slice(0, cut)).split(',').map(Number);
         const text = look.slice(cut + 1);
-        const font = textRaster.loadFont(p.font);
-        const cell = font.metrics.cellHeight || p.h;
-        const scale = p.h / cell;
-        const nw = Math.max(1, Math.round(p.w / scale));
-        const small = textRaster.drawText(nw, cell, text, {
-            font: p.font, color: color, align: 'left', glow: this.theme.glow || 0,
+        const pad = p.pad || 36;
+        return textRaster.drawText(p.w, p.h, text, {
+            font: p.font, color: color, align: 'left', glow: 0.1, x: pad, offsetY: pad,
         });
-        return shear(scaleInto(small, nw, cell, p.w, p.h), p.w, p.h, p.skew || 0);
     }
 
     _paintSegs(p, lit) {
@@ -120,7 +120,7 @@ class ShadowDash extends EvaHud {
             if (i >= lit) continue;
             const red = i >= (p.redFrom || 14);
             const c = red ? hot : accent;
-            if (red) fillQuad(buf, p.w, p.h, grow(quads[i], 5), [c[0], c[1], c[2], 70]);
+            if (red) fillQuad(buf, p.w, p.h, grow(quads[i], 2), [c[0], c[1], c[2], 48]);
             fillQuad(buf, p.w, p.h, quads[i], [c[0], c[1], c[2], 255]);
         }
         return buf;
@@ -135,13 +135,16 @@ class ShadowDash extends EvaHud {
         const ink = this.theme.rule && this.theme.name === 'Shadow Comfort' ? [16, 28, 48, 255] : [22, 12, 8, 255];
         const font = textRaster.loadFont(p.font);
         const cell = font.metrics.cellHeight || p.h;
-        const scale = Math.min((p.h - 16) / cell, (p.w - slant - 16) / Math.max(1, textRaster.measure(gear || '-', p.font, 0)));
-        const nw = Math.max(1, Math.round(p.w / scale));
-        const nh = Math.max(1, Math.round(cell));
-        const small = textRaster.drawText(nw, nh, gear || '-', { font: p.font, color: ink, align: 'center' });
-        const big = scaleInto(small, nw, nh, Math.round(nw * scale), Math.round(nh * scale));
-        const bw = Math.round(nw * scale), bh = Math.round(nh * scale);
-        blit(buf, p.w, p.h, big, bw, bh, Math.round((p.w - bw) / 2), Math.round((p.h - bh) / 2));
+        const tw = Math.max(1, Math.ceil(textRaster.measure(gear || '-', p.font, 0)) + 2);
+        const small = textRaster.drawText(tw, cell, gear || '-', { font: p.font, color: ink, align: 'center' });
+        let bw = tw, bh = cell, src = small;
+        if (bh > p.h - 12 || bw > p.w - slant - 12) {
+            const s = Math.min((p.h - 12) / bh, (p.w - slant - 12) / bw);
+            bw = Math.max(1, Math.round(tw * s));
+            bh = Math.max(1, Math.round(cell * s));
+            src = scaleInto(small, tw, cell, bw, bh);
+        }
+        blit(buf, p.w, p.h, src, bw, bh, Math.round((p.w - slant) / 2 + slant * 0.25 - bw / 2), Math.round((p.h - bh) / 2));
         return buf;
     }
 }

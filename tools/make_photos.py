@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from shadow_geom import ACCENT, BLOCKS, MUTED, NAVY, PHOTO_H, PHOTO_W, layout  # noqa: E402
+from shadow_geom import ACCENT, MUTED, NAVY, PHOTO_H, PHOTO_W, layout  # noqa: E402
 
 SRC = os.path.join(HERE, 'photos-src')
 OUT = os.path.join(HERE, '..', 'apps', 'shadow_dash', 'hud', 'photos')
@@ -88,8 +88,8 @@ def _icon_clock(d, x, y, s, color):
 ICONS = {'rng': _icon_fuel, 'wat': _icon_temp, 'clk': _icon_clock}
 
 
-def _outline(draw, quad, color):
-    draw.line(list(quad) + [quad[0]], fill=color, width=2)
+def _outline(draw, quad, color, width):
+    draw.line(list(quad) + [quad[0]], fill=color, width=width)
 
 
 def build(mode, font):
@@ -98,24 +98,25 @@ def build(mode, font):
         raise SystemExit('missing %s' % src)
     base = fit_panel(Image.open(src))
     spec = layout(mode)
-    x, y, w, h = spec['block']
-    _fade(base, spec['fade'], x + 180, 0.86)
+    speed = spec['parts'][0]
+    # fully black by the time the instruments start, so the panel below the photo matches
+    _fade(base, spec['fade'], speed['x'] - 10, 1.0)
     ov = Image.new('RGBA', (PHOTO_W, PHOTO_H), (0, 0, 0, 0))
     d = ImageDraw.Draw(ov)
     acc = ACCENT[mode] + (255,)
     st = spec['stripe']
     sx, sy, sw, sh, slant = st['x'], st['y'], st['w'], st['h'], st['slant']
     band = [(sx, sy + sh), (sx + sw, sy + sh), (sx + sw + slant, sy), (sx + slant, sy)]
-    d.polygon(band, fill=acc)
     if mode == 'comfort':
-        off = sw + 8
-        d.polygon([(p[0] + off, p[1]) for p in band], fill=NAVY + (255,))
-    muted = MUTED + (200,)
-    red = (255, 48, 42, 90)
-    dim = (255, 255, 255, 70)
+        d.polygon([(p[0] - 16, p[1]) for p in band], fill=NAVY + (255,))
+    d.polygon(band, fill=acc)
+    muted = MUTED + (190,)
     for i, quad in enumerate(spec['quads']):
-        _outline(d, quad, red if i >= 14 else dim)
+        red = i >= 14
+        _outline(d, quad, (255, 54, 48, 230) if red else (255, 255, 255, 110), 2 if red else 1)
     d.text((spec['kmh']['x'], spec['kmh']['y']), spec['kmh']['text'], font=font, fill=muted, anchor='lt')
+    label = spec['rpm_label']
+    d.text((label['x'], label['y']), label['text'], font=font, fill=MUTED + (label['alpha'],), anchor=label['anchor'])
     for icon in spec['icons']:
         ICONS[icon['id']](d, icon['x'], icon['y'], icon['s'], muted)
     out = Image.alpha_composite(base, ov)
@@ -124,7 +125,7 @@ def build(mode, font):
     if len(raw) != PHOTO_W * PHOTO_H * 4:
         raise SystemExit('%s rgba is %d bytes' % (mode, len(raw)))
     open(os.path.join(OUT, mode + '.rgba'), 'wb').write(raw)
-    print(mode, 'ok', BLOCKS[mode], 'speed box follows the layout')
+    print(mode, 'ok', 'speed', speed['x'], speed['y'], speed['w'], speed['h'])
 
 
 def main():

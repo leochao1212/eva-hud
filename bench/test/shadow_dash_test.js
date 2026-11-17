@@ -21,8 +21,12 @@ const load = (name) => JSON.parse(fs.readFileSync(path.join(HUD, 'layouts', name
 const PHOTO_BYTES = 1920 * 640 * 4;
 const CLEAR_Y = 636;   // 720 - 84: BMW's warning row
 // art ends left of these x values on the cropped 1920x640 photo
-const SAFE_X = { sport: 1224, comfort: 1344, eco: 1512 };
-const READINGS = ['{{speed}}', '{{rpm}}', '{{gear}}', '{{range}}', '{{coolant}}', '{{time}}'];
+const SAFE_X = { sport: 1190, comfort: 1310, eco: 1460 };
+const READINGS = {
+    sport: ['{{speed}}', '{{gear}}', '{{rpm}}', '{{range}}', '{{coolant}}', '{{time}}'],
+    comfort: ['{{speed}}', '{{gear}}', '{{rpm}}', '{{range}}', '{{coolant}}', '{{time}}'],
+    eco: ['{{speed}}', '{{gear}}', '{{rpm}}', '{{range}}', '{{time}}'],
+};
 const FONTS = { spd: 'e_rpm', rpm: 'e_num', gear: 'b_gear', rng: 'e_num', wat: 'e_num', clk: 'e3_time' };
 
 function layoutTests() {
@@ -46,9 +50,9 @@ function layoutTests() {
             const speed = canvas.parts.find((p) => p.id === 'spd');
             assert.ok(segs && segs.count === 16 && segs.redFrom === 14, 'rpm segments');
             assert.ok(badge && badge.slant > 0, 'gear badge');
-            assert.ok(speed && speed.hero && speed.skew > 0 && speed.h >= 140, 'hero speed');
+            assert.ok(speed && speed.hero && speed.pad >= 28 && speed.h >= 200, 'hero speed');
             const live = canvas.parts.filter((p) => p.text && p.text.indexOf('{{') === 0);
-            assert.deepStrictEqual(live.map((p) => p.text), READINGS);
+            assert.deepStrictEqual(live.map((p) => p.text), READINGS[mode]);
             live.filter((p) => p.type === 'text' || p.type === 'badge').forEach((p) => assert.strictEqual(p.font, FONTS[p.id], p.id));
             assert.strictEqual(canvas.parts.filter((p) => /^s\d$/.test(p.id)).length, 0, 'the 0-8 ticks are gone');
             const boxes = layout.widgets.filter((w) => w.id !== 'bg').map((w) => [w.x, w.y, w.w, w.h]);
@@ -71,7 +75,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.2.0');
+        assert.strictEqual(shadow.version, '1.2.1');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);

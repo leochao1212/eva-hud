@@ -142,7 +142,7 @@ MATISSE=/path/to/MatissePro-EB.otf uv run --no-project --with pillow python tool
 - **EVA**（`apps/eva_hud`，应用 id `eva_hud`）：挡风玻璃 HUD 和 NERV 仪表。从 0.8.8 起不再带 Shadow 的照片。车上如果还存着仪表选项 `shadow`，会回到 Original（整块仪表）。
 - **Shadow**（`apps/shadow_dash`，应用 id `shadow_dash`，日志 id `SHDW`）：按驾驶模式换照片的整块仪表，只做 iDrive 7（ID7 MGU，cluster-render 的 `panel`，例如 2020 Z4 G29）。没有 ID8。它和 EVA 的应用 id、设置文件、cluster-render 客户端名字（`shadow_dash_cluster`）都不一样，可以装在同一台车上。Shadow 占整块仪表。EVA 如果也选了整块仪表的设计，两台里只有一台能画在 `panel` 上；EVA 的 HUD 和地图区设计可以同时开着。
 
-默认照片是沈伯洋主题的三张图。肖像和标语在左边，右边用渐变融进暗部，一条斜的强调色边。上面是很大的斜体车速，下面是 km/h、平行四边形转速段（7000 转起是红色）、斜的档位牌，最底下一排是续航、水温和时间。Comfort 的强调色是橙，另有一条海军蓝斜边。最下面大约 84px 留给 BMW 自己的警告图标。车还没报告驾驶模式时按 Comfort。换客户的图就换 `tools/photos-src/` 里的三张 PNG。
+默认照片是沈伯洋主题的三张图。肖像和标语在左边，右边用渐变融进暗部，一条斜的强调色边。上面是很大的车速，下面是 km/h、平行四边形转速段（7000 转起是红色）、斜的档位牌，最底下一排是续航、水温和时间。Eco Pro 这一排只留续航和时间，避免挤在一起。Comfort 的强调色是橙，另有一条海军蓝斜边。最下面大约 84px 留给 BMW 自己的警告图标。车还没报告驾驶模式时按 Comfort。换客户的图就换 `tools/photos-src/` 里的三张 PNG。
 
 ### 给客户换图并构建
 

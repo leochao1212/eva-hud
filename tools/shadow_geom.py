@@ -1,27 +1,21 @@
 """Geometry for the Shadow cluster.
 
-The photo is 1920x640 on a 1920x720 panel. Live widgets end at y=636 so the
-bottom 84px stays clear for BMW's warning icons. Art stays on the left; the
-instruments use only the dark field on the right.
+Photo is 1920x640. Live widgets end at y=636 (bottom 84px is BMW's row).
+The fade, slash, segment outlines, icons, km/h and the rpm label are baked.
+The app draws the speed, lit segments, gear badge and the readout numbers.
 
-Static pieces (the fade, the diagonal stripe, segment outlines, icons, km/h)
-are baked into the photo. The app draws the speed, the lit segments, the gear
-badge and the three small readouts.
+The speed part is padded so its glow dies inside the quad, and the slash sits
+entirely to the left of that quad.
 """
 
 PHOTO_W, PHOTO_H = 1920, 640
 PANEL_H = 720
 CLEAR_Y = PANEL_H - 84  # 636
 
-# (x, y, w, h) of the instrument field. x is past each photo's art.
-BLOCKS = {
-    'sport': (1224, 8, 672, 616),
-    'comfort': (1344, 12, 552, 612),
-    'eco': (1512, 12, 384, 612),
-}
-
-# Where the photo starts dissolving into black. Left of the block, clear of the face.
-FADE = {'sport': 1040, 'comfort': 1160, 'eco': 1340}
+# Left edge of each instrument column, past the art. Eco keeps the full picture:
+# shifting it far enough for a 600px column cuts the captain.
+COLUMNS = {'sport': 1216, 'comfort': 1336, 'eco': 1488}
+FADE = {'sport': 1060, 'comfort': 1180, 'eco': 1360}
 
 ACCENT = {
     'sport': (255, 92, 0),
@@ -29,15 +23,19 @@ ACCENT = {
     'eco': (255, 106, 0),
 }
 NAVY = (18, 36, 72)
-INK = (255, 255, 255)
-MUTED = (255, 255, 255)  # baked at alpha 150, about 60%
+MUTED = (255, 255, 255)
+
 SEGMENTS = 16
-RED_FROM = 14            # 7000-8000 rpm, the last two thousands
-SLANT = 22               # px the top of a segment sits right of its bottom
+RED_FROM = 14
+SLANT = 18
+HERO_PAD = 32          # glow must reach 0 inside this inset
+HERO_H = 220           # part height; preview glyph cell fits in HERO_H - 2*HERO_PAD
+ICON = 32              # matches the footer number cap-height
+ICON_GAP = 12
+ITEM_GAP = 48
 
 
 def _quads(x, y, w, h, slant, gap):
-    """Parallelograms, top edge shifted right by `slant`. w is the bottom run."""
     pitch = w / float(SEGMENTS)
     out = []
     for i in range(SEGMENTS):
@@ -48,87 +46,105 @@ def _quads(x, y, w, h, slant, gap):
 
 
 def layout(mode):
-    x, y, w, h = BLOCKS[mode]
-    pad = 18 if w > 420 else 12
-    ix, iw = x + pad, w - pad - 16
-    # A digit is about 0.72 of its height, three of them plus the shear must fit.
-    speed_h = int(min(h * 0.46, (iw * 0.90) / (3 * 0.72)))
-    speed_h = max(140, speed_h)
-    cy = y + 6
-    parts = [{
+    col = COLUMNS[mode]
+    right = 1904
+    width = right - col
+    # content column, one left edge for the bar, the badge and the footer
+    # ix is the left edge of the ink. The speed quad starts HERO_PAD to the left,
+    # and that strip stays transparent so it cannot cover the slash.
+    ix = col + 20
+    iw = right - ix
+    top = 40
+
+    speed = {
         'id': 'spd', 'type': 'text', 'text': '{{speed}}', 'font': 'e_rpm', 'hero': True,
-        'x': ix - x, 'y': cy - y, 'w': iw, 'h': speed_h, 'align': 'left', 'color': 'fg', 'skew': 0.28,
-    }]
-    kmh = {'text': 'km/h', 'x': ix + int(speed_h * 1.15), 'y': cy + speed_h + 4, 'size': 22, 'color': MUTED, 'alpha': 170}
-    cy += speed_h + 36
-
-    seg_h = 36 if w < 420 else 42
-    quads = _quads(ix, cy, iw - SLANT, seg_h, SLANT, 5)
-    # bounding box includes the slant
-    seg = {
-        'id': 'segs', 'type': 'segs', 'count': SEGMENTS, 'redFrom': RED_FROM, 'slant': SLANT, 'gap': 5,
-        'x': ix - x, 'y': cy - y, 'w': iw, 'h': seg_h,
-        'quads': [[[p[0] - ix, p[1] - cy] for p in q] for q in quads],
+        'x': ix - HERO_PAD, 'y': top, 'w': min(iw + HERO_PAD, 700), 'h': HERO_H,
+        'align': 'left', 'color': 'fg', 'pad': HERO_PAD,
     }
-    parts.append(seg)
-    parts.append({
-        'id': 'rpm', 'type': 'text', 'text': '{{rpm}}', 'font': 'e_num',
-        'x': ix + iw - 150 - x, 'y': cy + seg_h + 4 - y, 'w': 150, 'h': 32,
-        'align': 'right', 'color': 'dim',
-    })
-    cy += seg_h + 40
+    kmh_y = speed['y'] + speed['h'] + 10
+    kmh = {'text': 'km/h', 'x': ix, 'y': kmh_y, 'size': 20, 'color': MUTED, 'alpha': 160}
 
-    badge_h = 92 if w >= 500 else 78
-    badge_w = min(210, iw // 2 + 20)
-    parts.append({
+    bar_y = kmh_y + 36
+    bar_h = 34
+    quads = _quads(ix, bar_y, iw - SLANT, bar_h, SLANT, 4)
+    segs = {
+        'id': 'segs', 'type': 'segs', 'count': SEGMENTS, 'redFrom': RED_FROM,
+        'x': ix, 'y': bar_y, 'w': iw, 'h': bar_h,
+        'quads': [[[p[0] - ix, p[1] - bar_y] for p in q] for q in quads],
+    }
+
+    # badge on the left, rpm number right-aligned to the bar, same row
+    badge_y = bar_y + bar_h + 28
+    badge_h = 96
+    badge_w = 168 if mode != 'eco' else 148
+    badge = {
         'id': 'gear', 'type': 'badge', 'text': '{{gear}}', 'font': 'b_gear',
-        'x': ix - x, 'y': cy - y, 'w': badge_w, 'h': badge_h, 'slant': 16,
-    })
-    cy += badge_h + 28
+        'x': ix, 'y': badge_y, 'w': badge_w, 'h': badge_h, 'slant': 18,
+    }
+    rpm_w = 168
+    rpm = {
+        'id': 'rpm', 'type': 'text', 'text': '{{rpm}}', 'font': 'e_num',
+        'x': ix + iw - rpm_w, 'y': badge_y + 8, 'w': rpm_w, 'h': ICON,
+        'align': 'right', 'color': 'dim',
+    }
+    rpm_label = {
+        'text': 'rpm', 'x': rpm['x'] - 8, 'y': badge_y + 14, 'size': 18,
+        'color': MUTED, 'alpha': 150, 'anchor': 'rt',
+    }
 
-    # one compact row: range, coolant, time. Time is the widest ("14:32").
-    row_h = 40
-    icon = 20 if iw < 420 else 24
-    if iw < 420:
-        slots = [108, 84, iw - 192]
-    else:
-        slots = [int(iw * 0.30), int(iw * 0.26), 0]
-        slots[2] = iw - slots[0] - slots[1]
-    acc = 0
-    icons = []
-    for key, token, font, slot in (
-        ('rng', '{{range}}', 'e_num', slots[0]),
-        ('wat', '{{coolant}}', 'e_num', slots[1]),
-        ('clk', '{{time}}', 'e3_time', slots[2]),
-    ):
-        sx = ix + acc
-        icons.append({'id': key, 'x': sx, 'y': cy + 6, 's': icon})
-        parts.append({
+    # footer pinned near the bottom so the column uses the height
+    row_y = 574
+    row_h = ICON
+    # text widths sized for the footer atlas (about 0.62 em per digit)
+    texts = [('rng', '{{range}}', 'e_num', 92), ('wat', '{{coolant}}', 'e_num', 72), ('clk', '{{time}}', 'e3_time', 132)]
+    if mode == 'eco':
+        texts = [('rng', '{{range}}', 'e_num', 96), ('clk', '{{time}}', 'e3_time', 140)]
+    gap = ITEM_GAP if mode != 'eco' else 36
+    icons, parts_footer = [], []
+    cursor = ix
+    for key, token, font, tw in texts:
+        icons.append({'id': key, 'x': cursor, 'y': row_y + 2, 's': ICON})
+        parts_footer.append({
             'id': key, 'type': 'text', 'text': token, 'font': font,
-            'x': sx + icon + 4 - x, 'y': cy - y, 'w': max(40, slot - icon - 6), 'h': row_h,
+            'x': cursor + ICON + ICON_GAP, 'y': row_y, 'w': tw, 'h': row_h,
             'align': 'left', 'color': 'dim',
         })
-        acc += slot
-    # keep the row above BMW's icons even on the shortest block
-    if cy + row_h > CLEAR_Y:
-        raise SystemExit('%s footer runs into BMW\'s row (y %d)' % (mode, cy + row_h))
+        cursor += ICON + ICON_GAP + tw + gap
+    if cursor - gap > right:
+        raise SystemExit('%s footer runs past the screen (%d)' % (mode, cursor))
 
-    rects = []
+    parts = [speed, segs, badge, rpm] + parts_footer
+    # slash: its rightmost point stays left of the speed quad
+    slash_top_right = ix - 18
+    stripe = {
+        'x': slash_top_right - 110,
+        'y': top + 6,
+        'w': 16,
+        'h': 132,
+        'slant': 78,
+    }
+
     for p in parts:
-        rects.append((x + p['x'], y + p['y'], p['w'], p['h']))
-    for r in rects:
-        if r[1] < 0 or r[0] < x or r[0] + r[2] > x + w + 4:
-            raise SystemExit('%s part leaves the dark field: %s' % (mode, r))
-        if r[1] + r[3] > CLEAR_Y:
-            raise SystemExit('%s part reaches BMW\'s row: %s' % (mode, r))
+        left_limit = ix - HERO_PAD - 1 if p['id'] == 'spd' else ix - 1
+        if p['x'] < left_limit or p['x'] + p['w'] > right + 1:
+            raise SystemExit('%s part leaves the column: %s' % (mode, p['id']))
+        if p['y'] < 24 or p['y'] + p['h'] > CLEAR_Y:
+            raise SystemExit('%s part hits the BMW row: %s y %d' % (mode, p['id'], p['y']))
+    # speed quad must not cover the slash
+    slash_right = stripe['x'] + stripe['w'] + stripe['slant']
+    ink_left = speed['x'] + speed['pad']
+    if slash_right > ink_left - 6:
+        raise SystemExit('%s slash meets the digits (%d >= %d)' % (mode, slash_right, ink_left))
 
     return {
-        'block': (x, y, w, h),
+        'column': col,
         'fade': FADE[mode],
         'parts': parts,
         'quads': quads,
         'kmh': kmh,
+        'rpm_label': rpm_label,
         'icons': icons,
-        # a short brush slash at the top of the field, not a full-height wall
-        'stripe': {'x': x + 4, 'y': y + 10, 'w': 22, 'h': min(170, speed_h - 20), 'slant': 96},
+        'stripe': stripe,
+        'canvas': (min(p['x'] for p in parts), top - 4,
+                   right - min(p['x'] for p in parts), CLEAR_Y - (top - 4)),
     }

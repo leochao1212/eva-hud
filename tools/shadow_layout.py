@@ -28,12 +28,21 @@ def _part(p):
 
 def build(photo, theme):
     spec = layout(photo)
-    x, y, w, h = spec['block']
-    parts = [_part(p) for p in spec['parts']]
+    parts_abs = spec['parts']
+    x0 = min(p['x'] for p in parts_abs)
+    y0 = min(p['y'] for p in parts_abs)
+    x1 = max(p['x'] + p['w'] for p in parts_abs)
+    y1 = max(p['y'] + p['h'] for p in parts_abs)
+    parts = []
+    for p in parts_abs:
+        one = _part(p)
+        one['x'] = p['x'] - x0
+        one['y'] = p['y'] - y0
+        parts.append(one)
     widgets = [
         {'id': 'bg', 'type': 'evaphoto', 'photo': photo, 'x': 0, 'y': 0, 'w': 1920, 'h': 640,
          'class': 'ambient', 'z': 0, 'keepInAlert': True},
-        {'id': 'cv', 'type': 'evacanvas', 'x': x, 'y': y, 'w': w, 'h': h,
+        {'id': 'cv', 'type': 'evacanvas', 'x': x0, 'y': y0, 'w': x1 - x0, 'h': y1 - y0,
          'class': 'overlay', 'z': 10, 'parts': parts},
     ]
     return {'schemaVersion': 2, 'name': 'Shadow ' + photo, 'theme': theme,
