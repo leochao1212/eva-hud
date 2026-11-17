@@ -448,6 +448,14 @@ def build(app_id, language='en'):
     src_id = app_id                                   # source folder apps/<src_id>/
     app_id = os.environ.get('APP_ID') or app_id       # output/internal id (lets one source build a per-HMI variant)
     spec = json.load(open(os.path.join(APPS, src_id, 'app.json'), encoding='utf-8'))
+    # An app marked id7Only (Shadow) draws on the whole-cluster panel, which ID8 does not offer.
+    # Skip it when this process is an ID8 build, so `MGU_HMI=ID8 python kit/tools/build.py` still
+    # builds the other apps and does not emit an ID8 package for this one.
+    if spec.get('id7Only'):
+        asked = [h.strip() for h in (os.environ.get('MGU_HMI') or 'ID7').split(',') if h.strip()]
+        if asked != ['ID7']:
+            print('%s: iDrive 7 only, not built (MGU_HMI=%s)' % (src_id, os.environ.get('MGU_HMI') or ''))
+            return
     spec = localize_spec(spec, language)
     spec['id'] = app_id
     apply_hmi_overrides(spec)

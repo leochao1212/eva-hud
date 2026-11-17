@@ -135,6 +135,35 @@ MATISSE=/path/to/MatissePro-EB.otf uv run --no-project --with pillow python tool
 
 **A built `.mgu` holds MatissePro glyphs. Don't publish it to Releases or anywhere else public.**
 
+## Two apps
+
+The repository now holds two apps that install separately.
+
+- **EVA** (`apps/eva_hud`, app id `eva_hud`): the windshield HUD and the NERV cluster designs. From 0.8.8 it no longer ships the Shadow photos. A car whose dash setting is still `shadow` falls back to Original (the whole cluster).
+- **Shadow** (`apps/shadow_dash`, app id `shadow_dash`, logging id `SHDW`): a whole-cluster photo that follows the drive mode. iDrive 7 only (ID7 MGU, cluster-render's `panel` target, for example a 2020 Z4 G29). No iDrive 8 build. It can be installed next to EVA: different app id, settings file and cluster-render client name (`shadow_dash_cluster`). Shadow takes the whole cluster. If EVA is also on a whole-cluster design, only one of them can hold `panel`; EVA's HUD and its map-area designs can run at the same time.
+
+It draws speed, rpm, gear, range and coolant on the current drive mode's photo. Comfort, Sport and Eco Pro each have their own photo and colours. Until the car reports a drive mode, Comfort is used.
+
+### Customer art and the installable package
+
+Put the three source pictures in [tools/photos-src/](tools/photos-src/README.md): `sport.png`, `comfort.png`, `eco.png`. The two-line slogan is part of each picture; replace the PNG to change it. The data-strip labels and units are `CELLS` and `UNITS` in `tools/make_photos.py`.
+
+The number glyphs are EVA's atlases, and this repository has no fonts. Bake `apps/eva_hud/hud/fonts/` first, as in [Fonts](#fonts). The build script links that directory into Shadow. Without the atlases the photos still build and the numbers are blank.
+
+```sh
+sh tools/build_shadow.sh
+```
+
+The installable file is `dist/shadow_dash@<version>.tgz` (a `.mgu` is written beside it). Copy the tgz to the car, then:
+
+```sh
+sh /var/opt/mgu-deploy/mgu-deploy.sh install --artifact shadow_dash@<version>.tgz --yes
+```
+
+Build without rebaking: `python3 -X utf8 kit/tools/build.py shadow_dash`. Do not set `MGU_HMI=ID8` for this app. An ID8 build of EVA can keep using those variables; Shadow is skipped and no ID8 package is produced.
+
+The center-screen settings are the on/off switch, which photo each drive mode uses, and demo data. Simulator: `node bench/server.js shadow_dash`.
+
 ## Build and test
 
 You need Node, Python 3 and the fonts from the previous step.
@@ -147,6 +176,7 @@ The simulator's first run generates a fake `oap-sdk/`, which can't be installed 
 
 ```sh
 for t in flicker layout popups alerts canvas diag magi demo dash; do node bench/test/eva_${t}_test.js | tail -1; done
+node bench/test/shadow_dash_test.js | tail -1
 ```
 
 Installing on a car needs the real `oap-sdk` extracted from a BMW app. It can't be redistributed, so it isn't here. The steps are in [apps/eva_hud/README.md](apps/eva_hud/README.md#装上车) (in Chinese). **Updating the app runtime restarts the head unit, so don't install while driving.**

@@ -139,7 +139,10 @@ class EvaHud extends HudApp {
         this.alertLayout = null;
         this.alertLayers = null;         // the alert's three layers, made at the first one
         this.normalHidden = false;
-        if (!(view && view.primary)) this._migrateMenu();
+        if (!(view && view.primary)) {
+            this._migrateMenu();
+            this._retireShadow();
+        }
         this.popups = view && view.primary ? view.primary.popups : new PopupWatch({ log: this.log });
         this.givingWay = false;
         ctx.settings.onChange((key) => this._guard('setting ' + key, () => this._liveSetting(key)));
@@ -206,6 +209,22 @@ class EvaHud extends HudApp {
             v.screens = 'both';
         }
         st.set('_menuV', MENU_VERSION);
+    }
+
+    /**
+     * Shadow is the shadow_dash app now, and this app no longer ships its photos.
+     * A saved "shadow" choice is the original whole-cluster design. setting() already
+     * refuses a value the menu no longer lists; this writes that fallback down so the
+     * saved file and the menu agree.
+     */
+    _retireShadow() {
+        const st = this.ctx.settings, v = st.values;
+        const keys = ['dashComfort', 'dashSport', 'dashEco', 'bothDashComfort', 'bothDashSport', 'bothDashEco', 'dashDesign', 'bothDash', 'comfortDash', 'sportDash', 'ecoDash'];
+        const hit = keys.filter((k) => v[k] === 'shadow');
+        if (!hit.length) return;
+        hit.forEach((k) => { v[k] = 'whole'; });
+        this.log.info('Shadow is its own app now; this dash uses Original');
+        st.set(hit[0], 'whole');
     }
 
     /** Which rows of the menu show, by their names on the screen: app.json's "showWhen" lists settings that bring a row up, any one set of them is enough. */

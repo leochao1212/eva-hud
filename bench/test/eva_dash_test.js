@@ -1798,6 +1798,22 @@ const tests = {
         await wait(130);
         assert.strictEqual(hud.alertKey, null);
     },
+    async 'a saved Shadow choice falls back to the original whole cluster'() {
+        const a = startApp({ screens: 'dash', _menuV: 2, demo: 'off', dashComfort: 'shadow', dashSport: 'shadow', dashEco: 'shadow', bothDashComfort: 'shadow' });
+        await wait(SETTLE_MS);
+        const dash = counts.evas[1];
+        assert.strictEqual(dash.setting('dashComfort'), 'whole');
+        assert.strictEqual(dash.setting('dashSport'), 'whole');
+        assert.strictEqual(a.hu.settings.get('dashComfort'), 'whole', 'the saved value is rewritten');
+        assert.strictEqual(a.hu.settings.get('bothDashComfort'), 'whole');
+        assert.strictEqual(dash.activeName, 'eva');
+        assert.deepStrictEqual(a.dash().targets(), ['panel']);
+        drive(a, 'SPORT');
+        await wait(200);
+        assert.strictEqual(dash.activeName, 'eva');
+        assert.ok(!fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/layouts/dash_shadow_sport.json')));
+        counts.evas.forEach((e) => e.stop && e.stop());
+    },
     async 'a dash that cannot start leaves the HUD running and says so'() {
         const a = startApp({ screens: 'both' }, { dashThrows: true });
         await wait(700);
