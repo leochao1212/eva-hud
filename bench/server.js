@@ -4,7 +4,7 @@
  *
  *   node bench/server.js [app_id]   then open http://localhost:8078
  *
- * app_id: eva_hud, the only app in this repository.
+ * app_id: eva_hud or shadow_dash.
  * The page draws the target the app's app.json config.target names.
  *
  * - Listens on a Unix socket speaking cluster-render protocol v1 (the framing

@@ -135,6 +135,35 @@ MATISSE=/path/to/MatissePro-EB.otf uv run --no-project --with pillow python tool
 
 **构建产物 `.mgu` 里含有 MatissePro 字形，不要发布到 Releases 或其他公开位置。**
 
+## 两个应用
+
+仓库里有两个可以分开安装的应用。
+
+- **EVA**（`apps/eva_hud`，应用 id `eva_hud`）：挡风玻璃 HUD 和 NERV 仪表。从 0.8.8 起不再带 Shadow 的照片。车上如果还存着仪表选项 `shadow`，会回到 Original（整块仪表）。
+- **Shadow**（`apps/shadow_dash`，应用 id `shadow_dash`，日志 id `SHDW`）：按驾驶模式换照片的整块仪表，只做 iDrive 7（ID7 MGU，cluster-render 的 `panel`，例如 2020 Z4 G29）。没有 ID8。它和 EVA 的应用 id、设置文件、cluster-render 客户端名字（`shadow_dash_cluster`）都不一样，可以装在同一台车上。Shadow 占整块仪表。EVA 如果也选了整块仪表的设计，两台里只有一台能画在 `panel` 上；EVA 的 HUD 和地图区设计可以同时开着。
+
+画面是车速、转速、档位、续航、水温，叠在当前驾驶模式的照片上。Comfort、Sport、Eco Pro 各用各的照片和颜色。车还没报告驾驶模式时按 Comfort。
+
+### 给客户换图并构建
+
+三张原图放在 [tools/photos-src/](tools/photos-src/README.md)：`sport.png`、`comfort.png`、`eco.png`。两行标语是每张图自己的内容，换标语就换这张图。数据条上的标签和单位在 `tools/make_photos.py` 的 `CELLS` 和 `UNITS`。
+
+数字用的字形和 EVA 相同，仓库里没有字体。先按上面的[字体](#字体)烘焙出 `apps/eva_hud/hud/fonts/`。构建脚本会把这个目录链到 Shadow；没有字形时照片能构建，数字是空的。
+
+```sh
+sh tools/build_shadow.sh
+```
+
+产物是 `dist/shadow_dash@<版本>.tgz`（同时还有一个 `.mgu`）。把 tgz 拷到车上之后：
+
+```sh
+sh /var/opt/mgu-deploy/mgu-deploy.sh install --artifact shadow_dash@<版本>.tgz --yes
+```
+
+只构建、不重新烘焙：`python3 -X utf8 kit/tools/build.py shadow_dash`。不要给这次构建设 `MGU_HMI=ID8`。给 EVA 做 ID8 包时可以照旧设这些变量；Shadow 会被跳过，不会打出 ID8 包。
+
+中控屏设置页：总开关、每个驾驶模式用哪张照片、演示数据。模拟器：`node bench/server.js shadow_dash`。
+
 ## 构建和测试
 
 需要 Node、Python 3，以及上一步生成的字体。
@@ -147,6 +176,7 @@ node bench/server.js eva_hud        # Mac 上的模拟器，打开 http://localh
 
 ```sh
 for t in flicker layout popups alerts canvas diag magi demo dash centre_client; do node bench/test/eva_${t}_test.js | tail -1; done
+node bench/test/shadow_dash_test.js | tail -1
 ```
 
 装车要用从 BMW app 提取的真实 `oap-sdk`，它不能再分发，所以不在这里。步骤见 [apps/eva_hud/README.md](apps/eva_hud/README.md#装上车)。**应用运行时更新会带动车机重启，开车时不要装。**

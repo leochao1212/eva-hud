@@ -35,13 +35,19 @@ def pack(folder, out):
     if os.path.isfile(pi):
         ignore += [l.strip() for l in open(pi, encoding='utf-8') if l.strip() and not l.startswith('#')]
     entries, split, raw_total = [], {}, 0
-    for root, dirs, files in os.walk(folder):
+    # followlinks: an app may link hud/fonts at another app's atlases (Shadow -> EVA).
+    # A dangling link is skipped so a build without those atlases still packs.
+    for root, dirs, files in os.walk(folder, followlinks=True, onerror=lambda e: None):
         dirs.sort()
         for f in sorted(files):
-            rel = os.path.relpath(os.path.join(root, f), folder).replace(os.sep, '/')
+            path = os.path.join(root, f)
+            # a dangling symlink (fonts linked before the atlases exist) is not a file
+            if not os.path.isfile(path):
+                continue
+            rel = os.path.relpath(path, folder).replace(os.sep, '/')
             if any(fnmatch.fnmatch(rel, g) for g in ignore):
                 continue
-            data = open(os.path.join(root, f), 'rb').read()
+            data = open(path, 'rb').read()
             raw_total += len(data)
             obj = None
             if rel.endswith('.json') and len(data) > SPLIT:

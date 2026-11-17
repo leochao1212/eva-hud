@@ -1,0 +1,119 @@
+{
+  "id": "shadow_dash",
+  "title": "Shadow",
+  "description": "Photo instrument cluster for iDrive 7: Sport, Comfort and Eco Pro each swap a full-cluster picture, with live speed, rpm, gear, range and coolant",
+  "version": "1.0.0",
+  "vendor": "custom",
+  "mguHmi": ["ID7"],
+  "id7Only": true,
+  "loggingId": "SHDW",
+  "iconGlyph": "SH",
+  "credits": {
+    "title": "SHADOW",
+    "text": "Photo cluster by DukeAPenguin, based on Bimmer-Lab and idrive-apps"
+  },
+  "maxDiskUsage": 83886080,
+  "shared": [
+    "hud.js",
+    "hud_text.js",
+    "hud_data.js",
+    "hud_themes.js",
+    "layouts.js",
+    "shaders.js",
+    "shift_score.js",
+    "sun.js",
+    "cluster_render_client.js",
+    "mgu_render_client.js",
+    "mgu_render_adapter.js",
+    "eva_canvas.js",
+    "eva_alerts.js",
+    "eva_diag.js",
+    "eva_popups.js",
+    "eva_flicker.js",
+    "eva_hud.js",
+    "eva_magi.js",
+    "eva_demo.js",
+    "shadow_dash.js"
+  ],
+  "signals": {
+    "de.bmw.infotainment.vehicle.CDS": {
+      "statusEngineSpeed2": "rs",
+      "statusEngineTemperature": "rs"
+    },
+    "de.bmw.infotainment.vehicle.CDS2": {
+      "statusLongitudinalAccelerationMassCenter": "rs",
+      "statusLateralAccelerationMassCenter": "rs"
+    },
+    "de.bmw.infotainment.vehicle.Vehicle2": {
+      "statusCarSpeed2": "rs"
+    },
+    "de.bmw.infotainment.drivingexcitement.FES": {
+      "statusSwitchDriveDynamicSport2": "rs",
+      "statusActualValueTorque2": "rs",
+      "statusFESVehicleDynamicSwitchHMI": "rs"
+    },
+    "de.bmw.infrastructure.VehicleInformation": {
+      "statusGearboxDrive": "s",
+      "DataPowerTrain2": "s"
+    },
+    "de.bmw.infotainment.KombiIF": {
+      "statusRangeTankStatus": "rs"
+    }
+  },
+  "screens": [
+    {
+      "name": "MAIN",
+      "kind": "menu",
+      "title": "Shadow",
+      "settings": true,
+      "items": [
+        ["text", "STATUS", "Starting the cluster"]
+      ]
+    }
+  ],
+  "settings": [
+    {
+      "key": "enabled",
+      "label": "Shadow cluster",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "photoComfort",
+      "label": "Comfort photo",
+      "type": "choice",
+      "default": "comfort",
+      "options": [["sport", "Sport"], ["comfort", "Comfort"], ["eco", "Eco Pro"]],
+      "showWhen": [{"enabled": true}]
+    },
+    {
+      "key": "photoSport",
+      "label": "Sport photo",
+      "type": "choice",
+      "default": "sport",
+      "options": [["sport", "Sport"], ["comfort", "Comfort"], ["eco", "Eco Pro"]],
+      "showWhen": [{"enabled": true}]
+    },
+    {
+      "key": "photoEco",
+      "label": "Eco Pro photo",
+      "type": "choice",
+      "default": "eco",
+      "options": [["sport", "Sport"], ["comfort", "Comfort"], ["eco", "Eco Pro"]],
+      "showWhen": [{"enabled": true}]
+    },
+    {
+      "key": "demo",
+      "label": "Demo data",
+      "type": "choice",
+      "default": "off",
+      "options": [["off", "Off"], ["on", "On"]]
+    }
+  ],
+  "config": {
+    "target": "panel",
+    "statusName": "SHADOW",
+    "socketPath": "/dev/shm/cluster-render/render.sock",
+    "utcOffsetMinutes": null
+  }
+}

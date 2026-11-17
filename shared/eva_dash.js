@@ -43,7 +43,8 @@ class EvaDash extends EvaHud {
         if (s !== 'dash' && s !== 'both') return 'off';
         const design = this._dashDesign();
         if (design === 'off') return 'off';
-        if (design === 'shadow') return 'shadow_' + this._driveProfile();
+        // 'shadow' used to be a design in this app. It is the shadow_dash app now. An unknown
+        // value, including one setting() did not already replace, is the original whole cluster.
         return CENTRE_DESIGNS.indexOf(design) >= 0 || WHOLE_DESIGNS.indexOf(design) >= 0 ? design : 'eva';
     }
     _layoutFile(name) {
@@ -51,7 +52,7 @@ class EvaDash extends EvaHud {
         if (name === 'alert' && this._isCentre()) return this._layoutName().indexOf('sq') === 0 ? 'dash_sq_alert' : 'dash_centre_alert';
         return 'dash_' + name;
     }
-    _layoutLabel(name) { return name === 'eva' ? 'EVA' : name.indexOf('shadow') === 0 ? 'Shadow' : 'Design ' + name.toUpperCase(); }
+    _layoutLabel(name) { return name === 'eva' ? 'EVA' : 'Design ' + name.toUpperCase(); }
     _isCentre() { return CENTRE_DESIGNS.indexOf(this._layoutName()) >= 0; }
     _followsDriveMode() { const s = this._screens(); return s === 'dash' || s === 'both'; }
     _layerFields() { return this.target === 'map' ? { contend: 1, guide_hold: 0 } : {}; }

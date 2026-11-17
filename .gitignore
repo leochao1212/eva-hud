@@ -14,6 +14,7 @@ __pycache__/
 *.woff
 *.woff2
 apps/*/hud/fonts/
+apps/*/hud/fonts
 kit/runtime/fonts/
 tools/fonts-src/
 

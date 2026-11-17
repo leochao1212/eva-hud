@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Generate the Shadow dash layouts (one per drive mode): a photo fills the cluster and four
-frosted corner panels (baked into the photo) carry white live values with the mode's accent on labels.
-Re-run this rather than editing hud/layouts/dash_shadow_*.json by hand."""
-import json, os
+"""Generate the Shadow dash layouts (one per drive mode) into apps/shadow_dash.
+
+A photo fills the cluster. Labels and units are baked into the photo (tools/make_photos.py);
+only the live numbers are widgets. Re-run this rather than editing the JSON by hand.
+
+    python3 -X utf8 tools/shadow_layout.py
+"""
+import json
+import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, '..', 'apps', 'eva_hud', 'hud', 'layouts')
+OUT = os.path.join(HERE, '..', 'apps', 'shadow_dash', 'hud', 'layouts')
 
 MODES = [('sport', 'shadow_sport'), ('comfort', 'shadow_comfort'), ('eco', 'shadow_eco')]
 
@@ -26,7 +31,6 @@ def canvas(cid, box, parts):
 
 
 def build(photo, theme):
-    # Labels and units are baked into the photo (tools/make_photos.py); only the live numbers are widgets.
     # Part coords are relative to the strip origin (700, 498).
     nums = canvas('cv_nums', STRIP, [
         txt('spd', '{{speed}}', 'e_rpm', 20, 28, 176, 111, 'fg', 'right', True),
@@ -42,8 +46,15 @@ def build(photo, theme):
             'widgets': [bg, nums]}
 
 
-for photo, theme in MODES:
-    out = os.path.join(OUT, 'dash_%s.json' % theme)
-    with open(out, 'w', encoding='utf-8', newline='\n') as f:
-        json.dump(build(photo, theme), f, ensure_ascii=False, indent=1)
-    print('wrote', os.path.relpath(out, os.path.join(HERE, '..')))
+def main():
+    os.makedirs(OUT, exist_ok=True)
+    for photo, theme in MODES:
+        path = os.path.join(OUT, 'dash_%s.json' % theme)
+        with open(path, 'w', encoding='utf-8', newline='\n') as f:
+            json.dump(build(photo, theme), f, ensure_ascii=False, indent=1)
+            f.write('\n')
+        print('wrote', os.path.relpath(path, os.path.join(HERE, '..')))
+
+
+if __name__ == '__main__':
+    main()

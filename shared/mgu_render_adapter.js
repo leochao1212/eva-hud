@@ -6,7 +6,8 @@
  * Why: on iDrive 8 the renderer is mgu-render, whose own client takes part in the foreground gate
  * (show/state) and draws frame by frame; the upstream JSON client EVA ships does not, so mgu-render
  * drops its connection and nothing shows. This wraps the native client so EVA's image-layer dashes
- * (the Shadow dash: a photo + text canvases) draw unchanged. It is a drop-in for ClusterRender.
+ * (a photo plus text canvases, such as the centre cockpit) draw unchanged. It is a drop-in for ClusterRender.
+ * The separate Shadow app does not use this path: it is iDrive 7 only, on cluster-render's panel.
  *
  * Only image/asset layers are supported - what the Shadow dash uses. effect() (GLSL shaders, the
  * battle-display widgets) makes an empty layer and uniform() is a no-op, so those designs draw nothing
