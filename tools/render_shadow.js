@@ -143,6 +143,26 @@ function over(dst, dx, dy, src, sw, sh) {
 
 function px(c) { return Math.max(0, Math.min(255, Math.round(c))); }
 
+function paintFill(dst, layer) {
+    const u = layer.uniforms;
+    if (!u.u_color || !u.u_size || u.u_max) return false;
+    const c = u.u_color;
+    for (let y = 0; y < layer.h; y++) {
+        const yy = layer.y + y;
+        if (yy < 0 || yy >= H) continue;
+        for (let x = 0; x < layer.w; x++) {
+            const xx = layer.x + x;
+            if (xx < 0 || xx >= W) continue;
+            const di = (yy * W + xx) * 4;
+            dst[di] = Math.round(c[0] * 255);
+            dst[di + 1] = Math.round(c[1] * 255);
+            dst[di + 2] = Math.round(c[2] * 255);
+            dst[di + 3] = 255;
+        }
+    }
+    return true;
+}
+
 function paintBar(dst, layer) {
     const u = layer.uniforms;
     if (!u.u_max || !u.u_size) return;
@@ -197,7 +217,9 @@ function frame() {
         if (l.kind === 'image') {
             const buf = client.buffers.get(l.ref);
             if (buf) over(dst, l.x, l.y, buf, l.iw, l.ih);
-        } else if (l.kind === 'effect') paintBar(dst, l);
+        } else if (l.kind === 'effect') {
+            if (!paintFill(dst, l)) paintBar(dst, l);
+        }
     });
     // y=636-720 stays the black the buffer was cleared to. The photo fades to that
     // black in its last rows, so there is no seam and no smeared last-row copy.

@@ -8,9 +8,10 @@
  * no full-screen alerts: a saved EVA "shadow" design is not this app's problem.
  *
  * The three photos and the layouts live in this app's hud/ (tools/make_photos.py, tools/shadow_layout.py).
- * Instruments sit in the dark area on the right of each photo, in EVA's type: the label, the speed
- * atlas, the unit, the segmented rev bar, the gear (evagear) and the small readouts. The photo
- * holds the fade and the slanted accent. Glyphs are EVA's atlases, drawn at their own size.
+ * Instruments sit in the dark area on the right of each photo, in EVA's type. The kombi paints a
+ * black box over the theme when a layer covers the gear letter in its bottom strip, so that
+ * letter (x 1380-1460, y 660-720) is left open and the rest of the strip is black. Glyphs are
+ * EVA's atlases, drawn at their own size.
  */
 const EvaHud = require('./eva_hud');
 const textRaster = require('./hud_text');

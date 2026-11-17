@@ -6,6 +6,11 @@ is on the transparent canvas in the dark field, above BMW's y=636 warning row.
 """
 PHOTO_W, PHOTO_H = 1920, 640
 PANEL_H, CLEAR_Y, RIGHT = 720, 636, 1896
+# BMW draws a black box over the theme when anything covers the gear letter in
+# its own bottom strip. Cluster Themes leaves x=1380..1460, y=660..720 open
+# (bimmer-lab/apps apps/cluster_themes/hud/layouts/minimal.json) and covers the
+# rest of that band. The letter itself stays BMW's.
+GEAR_LETTER = (1380, 660, 80, 60)
 ART_RIGHT = {'sport': 1172, 'comfort': 1248, 'eco': 1452}
 FADE = {'sport': 1060, 'comfort': 1180, 'eco': 1360}
 BOTTOM_FADE_Y = 576

@@ -1023,6 +1023,28 @@
    "h": 182,
    "z": 12,
    "class": "overlay"
+  },
+  {
+   "id": "strip_l",
+   "type": "fill",
+   "x": 0,
+   "y": 660,
+   "w": 1380,
+   "h": 60,
+   "class": "overlay",
+   "z": 30,
+   "color": "black"
+  },
+  {
+   "id": "strip_r",
+   "type": "fill",
+   "x": 1460,
+   "y": 660,
+   "w": 460,
+   "h": 60,
+   "class": "overlay",
+   "z": 30,
+   "color": "black"
   }
  ]
 }

@@ -19,7 +19,9 @@ const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 const load = (name) => JSON.parse(fs.readFileSync(path.join(HUD, 'layouts', name + '.json'), 'utf8'));
 
 const PHOTO_BYTES = 1920 * 640 * 4;
-const CLEAR_Y = 636;   // 720 - 84: BMW's warning row
+const CLEAR_Y = 636;   // instruments stay above BMW's bottom strip
+// BMW's gear letter in the bottom strip. Covering it makes the kombi paint a black box on top.
+const GEAR_LETTER = [1380, 660, 80, 60];
 // art ends left of these x values on the cropped 1920x640 photo
 const SAFE_X = { sport: 1190, comfort: 1270, eco: 1460 };
 const READINGS = {
@@ -71,7 +73,7 @@ function layoutTests() {
             const live = canvas.parts.filter((p) => p.text && READINGS[mode].indexOf(p.text) >= 0);
             assert.deepStrictEqual(live.map((p) => p.text), READINGS[mode]);
             assert.strictEqual(canvas.parts.filter((p) => /^s\d$/.test(p.id)).length, 0, 'the 0-8 ticks are gone');
-            const boxes = layout.widgets.filter((w) => w.id !== 'bg').map((w) => [w.x, w.y, w.w, w.h]);
+            const boxes = layout.widgets.filter((w) => w.id !== 'bg' && w.id.indexOf('strip_') !== 0).map((w) => [w.x, w.y, w.w, w.h]);
             canvas.parts.forEach((p) => boxes.push([canvas.x + p.x, canvas.y + p.y, p.w, p.h]));
             boxes.forEach((b) => {
                 assert.ok(b[0] >= SAFE_X[mode], mode + ' covers the art at x ' + b[0]);
@@ -85,6 +87,26 @@ function layoutTests() {
             }
         };
     });
+    tests['the bottom strip is covered except for BMW\'s gear letter'] = () => {
+        const hits = (a, b) => a[0] < b[0] + b[2] && a[0] + a[2] > b[0] && a[1] < b[1] + b[3] && a[1] + a[3] > b[1];
+        ['sport', 'comfort', 'eco'].forEach((mode) => {
+            const layout = load('dash_shadow_' + mode);
+            const left = layout.widgets.find((w) => w.id === 'strip_l');
+            const right = layout.widgets.find((w) => w.id === 'strip_r');
+            assert.ok(left && right && left.type === 'fill' && right.type === 'fill', mode + ' strip covers');
+            assert.strictEqual(left.color, 'black');
+            assert.strictEqual(right.color, 'black');
+            assert.deepStrictEqual([left.x, left.y, left.w, left.h], [0, 660, 1380, 60]);
+            assert.deepStrictEqual([right.x, right.y, right.w, right.h], [1460, 660, 460, 60]);
+            const rects = [];
+            layout.widgets.forEach((w) => { if (w.id !== 'strip_l' && w.id !== 'strip_r') rects.push([w.x, w.y, w.w, w.h, w.id]); });
+            const canvas = layout.widgets.find((w) => w.type === 'evacanvas');
+            canvas.parts.forEach((p) => rects.push([canvas.x + p.x, canvas.y + p.y, p.w, p.h, p.id]));
+            rects.forEach((r) => assert.ok(!hits(r, GEAR_LETTER), mode + ' ' + r[4] + ' covers the gear letter'));
+            const gear = layout.widgets.find((w) => w.type === 'evagear');
+            assert.ok(gear.x >= 1440, mode + ' gear is back in the right-hand column');
+        });
+    };
     tests['EVA no longer ships the Shadow photos or the Shadow menu row'] = () => {
         const spec = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/eva_hud/app.json'), 'utf8'));
         spec.settings.forEach((s) => (s.options || []).forEach((o) => assert.notStrictEqual(o[0], 'shadow', s.key)));
@@ -94,7 +116,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.4.0');
+        assert.strictEqual(shadow.version, '1.4.1');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);
@@ -174,7 +196,7 @@ function runtimeTests() {
             assert.strictEqual(dash.target, 'panel');
             assert.strictEqual(dash.activeName, 'shadow_comfort');
             assert.deepStrictEqual(client.targets(), ['panel']);
-            assert.strictEqual(client.layers.size, 3);
+            assert.strictEqual(client.layers.size, 5);
             const photo = Array.from(client.layers.values()).find((l) => l.iw === 1920 && l.ih === 640);
             assert.ok(photo, 'no full-cluster photo');
             const sent = client.sent.find((s) => s.ref && client.layers.get(s.ref) === photo);
