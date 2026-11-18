@@ -20,6 +20,11 @@ const PHOTOS = ['sport', 'comfort', 'eco'];
 const PROFILE_KEY = { comfort: 'Comfort', sport: 'Sport', eco: 'Eco' };
 const TEXT_MS = 250;
 const POPUP_SLOT = 0x202;   // BMW's cluster pop-ups, the same slot the EVA dash yields
+// A drive-mode swap keeps the old photo on top until the new one is drawn, then fades it out.
+// Without it the 4.9 MB upload leaves the panel without a photo for a moment and the stock
+// gauges underneath show through.
+const SWAP_FADE_MS = 250;
+const SWAP_WAIT_MS = 3000;  // the new photo not drawn by then: drop the old one anyway
 
 class ShadowDash extends EvaHud {
     constructor(ctx) {
@@ -75,6 +80,63 @@ class ShadowDash extends EvaHud {
     }
 
     _popupSlot() { return POPUP_SLOT; }
+
+    /* ---------------- drive-mode swap: the old photo stays until the new one is drawn ---------------- */
+
+    _rebuildInner() {
+        const old = this.widgets.get('bg');
+        const next = this._layoutName();
+        const keep = this.client.ready && old && next !== 'off' && next !== this.activeName;
+        let leaving = this.leaving;
+        if (keep) {
+            if (leaving && !this._photoShown(old.ref)) {
+                // the current photo never got drawn: the one already leaving is still the visible one
+                this.client.drop(old.ref);
+            } else {
+                this._dropLeaving();
+                // above the new photo (z 0, created next) until the new one is drawn
+                this.client.set(old.ref, { z: 1 });
+                leaving = { ref: old.ref, since: Date.now(), fadeFrom: 0 };
+            }
+            this.widgets.delete('bg');
+        } else {
+            this._dropLeaving();
+            leaving = null;
+        }
+        this.leaving = null;
+        EvaHud.prototype._rebuildInner.call(this);
+        this.leaving = leaving;
+    }
+
+    _photoShown(ref) {
+        const s = this.layerStates.get(ref);
+        return !!s && s.state === 'shown';
+    }
+
+    _dropLeaving() {
+        if (this.leaving && this.client.ready) this.client.drop(this.leaving.ref);
+        this.leaving = null;
+    }
+
+    /** Waits for the new photo, then fades the old one out over SWAP_FADE_MS and drops it. */
+    _stepSwap(now) {
+        const l = this.leaving;
+        if (!l) return;
+        const bg = this.widgets.get('bg');
+        if (!bg || this.givingWay || now - l.since > SWAP_WAIT_MS + SWAP_FADE_MS) { this._dropLeaving(); return; }
+        if (!l.fadeFrom) {
+            if (!this._photoShown(bg.ref) && now - l.since < SWAP_WAIT_MS) return;
+            l.fadeFrom = now;
+        }
+        const t = (now - l.fadeFrom) / SWAP_FADE_MS;
+        if (t >= 1) { this._dropLeaving(); return; }
+        if (t > 0) this.client.set(l.ref, { opacity: Math.round((1 - t) * 100) / 100 });
+    }
+
+    _tick() {
+        if (this.client.ready) this._guard('swap', () => this._stepSwap(Date.now()));
+        EvaHud.prototype._tick.call(this);
+    }
 
     _token(key) {
         if (key === 'clusterstatus') {
