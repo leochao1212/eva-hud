@@ -41,7 +41,13 @@ const TRANSITION = { inMs: 420, holdMinMs: 260, holdMaxMs: 1500, outMs: 420, cel
 const TRANSITION_WORDS = { sport: ['SPORT', '第一種戦闘配置'], comfort: ['COMFORT', '通常態勢'], eco: ['ECO PRO', '活動限界'] };
 const TRANSITION_LABEL = { w: 720, h: 132 };
 const EVA_ORANGE = [255, 136, 0];
-const GEAR_LETTER = [1380, 660, 80, 60];   // BMW's gear letter: left open, as the designs' bottom cover leaves it
+const GEAR_LETTER = [1380, 660, 80, 60];   // BMW's gear letter: no layer's rect may meet it (the kombi then paints its black box)
+/*
+ * The whole designs' black bottom strips (botcover_l/_c/_r: three rects around the gear letter, as Shadow's) are the same
+ * in every design. They live on a connection of their own (its own 8 layers: C3 and E3 already have seven) and stay
+ * up across a drive-mode swap, so BMW's bottom row never shows for a frame while the design is built again.
+ */
+const BOTTOM_STRIP = /^botcover/;
 const CENTRE_DESIGNS = ['a', 'b', 'c1', 'c2', 'e1', 'e2', 'sq', 'sqs', 'sqc', 'sqe'];   // sq*: the ID8 map-target squares (dash_sq*), sqs/sqc/sqe = ID7 HUD's Sport/Comfort/Eco
 const WHOLE_DESIGNS = ['d', 'c3', 'e3'];     // besides the original, 'eva'
 const TEXT_MS = 250;     // its text rectangles are about four times the HUD's, and share one upload budget with it
@@ -116,7 +122,60 @@ class EvaDash extends EvaHud {
         if (target !== this.target) { this.target = target; this.targetState = null; }
         this.freedWidgets = [];
         if (this.transition && (target !== 'panel' || this._layoutName() === 'off')) this._endTransition(true);
+        this.stripsSeen = {};
         super._rebuildInner();
+        // strips the new design doesn't have (a centre design, or off): only now are they dropped
+        Object.keys(this.strips || {}).forEach((id) => { if (!this.stripsSeen[id]) this._dropStrip(id); });
+        this.stripsSeen = null;
+    }
+
+    _create(w) {
+        if (w.type === 'fill' && BOTTOM_STRIP.test(w.id) && this.target === 'panel') { this._keepStrip(w); return; }
+        super._create(w);
+    }
+
+    /* ---------------- the bottom strips: their own connection, kept across a swap ---------------- */
+
+    _stripClient() {
+        if (!this.stripsClient) {
+            const name = (this.view.clientName || this.ctx.spec.id) + '_strips';
+            const c = new this.client.constructor(name, this.socketPath, this.log, this.size, false);
+            c.on('refused', (op, ref, reason) => this.log.warn('refused ' + op + ' on ' + ref + ' [strips]: ' + reason));
+            c.on('layer', (ref, state, reason) => { if (state === 'error') this.log.warn('layer ' + ref + ' [strips] error: ' + reason); });
+            c.on('disconnected', () => this.log.warn('cluster-render disconnected [strips], client will retry'));
+            this.stripsClient = c;
+            c.connect();          // layers made before it is up are sent when it is
+        }
+        return this.stripsClient;
+    }
+
+    _keepStrip(w) {
+        const key = [w.x, w.y, w.w, w.h, w.color, w.class, w.z].join(',');
+        this.strips = this.strips || {};
+        if (this.stripsSeen) this.stripsSeen[w.id] = true;
+        const kept = this.strips[w.id];
+        if (kept && kept.key === key) return;
+        if (kept) this._dropStrip(w.id);
+        const main = this.client, c = this._stripClient();
+        this.client = c;                   // the fill's own code makes it, on the strips' connection
+        try { super._create(w); } finally { this.client = main; }
+        const x = this.widgets.get(w.id);
+        if (!x) return;
+        this.widgets.delete(w.id);
+        this.strips[w.id] = { ref: x.ref, key };
+        if (this.givingWay) c.set(x.ref, { visible: 0 });
+    }
+
+    _dropStrip(id) {
+        const s = this.strips && this.strips[id];
+        if (!s) return;
+        this.stripsClient.drop(s.ref);
+        delete this.strips[id];
+    }
+
+    _showForPopup(hide, now) {
+        Object.keys(this.strips || {}).forEach((id) => this.stripsClient.set(this.strips[id].ref, { visible: hide ? 0 : 1 }));
+        super._showForPopup(hide, now);
     }
 
     /** The drive mode arrives on the HUD's signals. */
@@ -154,7 +213,10 @@ class EvaDash extends EvaHud {
         const x0 = Math.max(0, Math.min(...boxes.map((b) => b.x)));
         const y0 = Math.max(0, Math.min(...boxes.map((b) => b.y)));
         const x1 = Math.min(this.size[0], Math.max(...boxes.map((b) => b.x + b.w)));
-        const y1 = Math.min(this.size[1], Math.max(...boxes.map((b) => b.y + b.h)));
+        let y1 = Math.min(this.size[1], Math.max(...boxes.map((b) => b.y + b.h)));
+        // stop above BMW's gear letter: a rect meeting it gets the kombi's black box (the bottom strips stay up below)
+        const g = GEAR_LETTER;
+        if (x0 < g[0] + g[2] && x1 > g[0] && y1 > g[1]) y1 = Math.max(y0, g[1]);
         return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
     }
 
@@ -268,6 +330,8 @@ class EvaDash extends EvaHud {
 
     stop() {
         this._endTransition(true);
+        Object.keys(this.strips || {}).forEach((id) => this._dropStrip(id));
+        if (this.stripsClient) this.stripsClient.close();
         super.stop();
     }
 }

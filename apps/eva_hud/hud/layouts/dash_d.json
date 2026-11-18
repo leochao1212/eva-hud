@@ -540,22 +540,40 @@
    ]
   },
   {
-   "id": "botcover",
+   "id": "botcover_l",
    "type": "fill",
    "x": 0,
    "y": 636,
-   "w": 1920,
+   "w": 1380,
    "h": 84,
    "color": "black",
    "class": "overlay",
    "z": 20,
-   "keepInAlert": true,
-   "hole": [
-    1380,
-    660,
-    80,
-    60
-   ]
+   "keepInAlert": true
+  },
+  {
+   "id": "botcover_c",
+   "type": "fill",
+   "x": 1380,
+   "y": 636,
+   "w": 80,
+   "h": 24,
+   "color": "black",
+   "class": "overlay",
+   "z": 20,
+   "keepInAlert": true
+  },
+  {
+   "id": "botcover_r",
+   "type": "fill",
+   "x": 1460,
+   "y": 636,
+   "w": 460,
+   "h": 84,
+   "color": "black",
+   "class": "overlay",
+   "z": 20,
+   "keepInAlert": true
   }
  ]
 }

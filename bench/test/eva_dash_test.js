@@ -155,8 +155,9 @@ const tests = {
     async 'one app opens one connection per screen, each drawing on its own'() {
         const a = startApp({ screens: 'both' });
         await wait(150);
-        assert.strictEqual(FakeClient.all.length, 2);
-        assert.notStrictEqual(a.hud().name, a.dash().name);
+        assert.strictEqual(FakeClient.all.length, 3, 'the HUD, the dash, and the dash\'s bottom strips');
+        assert.strictEqual(new Set(FakeClient.all.map((c) => c.name)).size, 3);
+        assert.deepStrictEqual(FakeClient.all[2].targets(), ['panel']);
         assert.deepStrictEqual(a.hud().targets(), ['hud']);
         assert.deepStrictEqual(a.dash().targets(), ['panel']);
     },
@@ -1833,8 +1834,10 @@ const tests = {
         const [, hex] = cover();
         assert.ok(hex.uniforms.u_t[0] > 0 && hex.uniforms.u_t[0] < 1, 'sweeping in: ' + hex.uniforms.u_t);
         assert.deepStrictEqual([hex.x, hex.y], [0, 0]);
-        assert.deepStrictEqual(hex.uniforms.u_hole, [1380, 660, 80, 60], "the hexagons leave BMW's gear letter open");
+        assert.strictEqual(hex.y + hex.h, 660, "the hexagons stop above BMW's gear letter: " + hex.h);
         assert.ok(hex.w > 1800 && hex.h >= 600, 'covers the designs: ' + hex.w + 'x' + hex.h);
+        const strips = FakeClient.all[2], stripRefs = Array.from(strips.layers.keys());
+        assert.strictEqual(stripRefs.length, 3, 'the bottom strips, on their own connection');
         await wait(450);
         assert.strictEqual(d.activeName, 'eva', 'swapped under the hexagons');
         assert.strictEqual(cover()[1].uniforms.u_t[0], 1, 'fully covered while it swaps');
@@ -1853,6 +1856,8 @@ const tests = {
         assert.ok(!cover(), 'hexagons gone');
         assert.ok(!label(), 'label asset gone');
         assert.strictEqual(c.layers.size, d.widgets.size, 'only the new design is left');
+        assert.deepStrictEqual(Array.from(strips.layers.keys()), stripRefs, 'the strips stayed up through the swap');
+        assert.deepStrictEqual(strips.refused, []);
         assert.ok(most <= 8, most + ' layers at once');
         assert.deepStrictEqual(c.refused, [], 'nothing refused (layers, memory)');
     },
@@ -1861,16 +1866,47 @@ const tests = {
         const hits = (w) => w.x < G[0] + G[2] && w.x + w.w > G[0] && w.y < G[1] + G[3] && w.y + w.h > G[1];
         for (const name of ['dash_eva', 'dash_c3', 'dash_e3', 'dash_d']) {
             const doc = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/eva_hud/hud/layouts', name + '.json'), 'utf8'));
-            const over = doc.widgets.filter(hits);
-            assert.deepStrictEqual(over.map((w) => w.id), ['botcover'], name + ': ' + over.map((w) => w.id));
-            assert.deepStrictEqual(over[0].hole, G, name + ": the cover's hole is the gear letter");
-            assert.ok(!over[0].holeWhen, name + ': always open');
+            assert.deepStrictEqual(doc.widgets.filter(hits).map((w) => w.id), [], name + ': no rect meets the gear letter');
+            const strips = doc.widgets.filter((w) => /^botcover/.test(w.id));
+            assert.deepStrictEqual(strips.map((w) => w.id), ['botcover_l', 'botcover_c', 'botcover_r'], name);
+            // together they cover the whole bottom band from y=636, but the gear letter
+            for (let y = 636; y < 720; y += 2) {
+                for (let x = 0; x < 1920; x += 4) {
+                    const inGear = x >= G[0] && x < G[0] + G[2] && y >= G[1];
+                    const covered = strips.some((w) => x >= w.x && x < w.x + w.w && y >= w.y && y < w.y + w.h);
+                    assert.strictEqual(covered, !inGear, name + ' at ' + x + ',' + y);
+                }
+            }
         }
-        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3' });
+        for (const design of ['c3', 'whole', 'e3', 'd']) {
+            const a = startApp({ screens: 'dash', demo: 'off', dashComfort: design });
+            await wait(SETTLE_MS);
+            const all = FakeClient.all.slice(1).flatMap((c) => Array.from(c.layers.values())).filter((l) => l.kind !== 'asset');
+            assert.deepStrictEqual(all.filter(hits).map((l) => l.x + ',' + l.y + ' ' + l.w + 'x' + l.h), [], design + ': on the car');
+            assert.strictEqual(FakeClient.all[2].layers.size, 3, design + ': strips on their own connection');
+            assert.deepStrictEqual(FakeClient.all.flatMap((c) => c.refused), [], design);
+        }
+    },
+    async 'the bottom strips go with a centre design or off, and hide for a BMW pop-up'() {
+        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3', dashSport: 'a' });
         await wait(SETTLE_MS);
-        const cover = Array.from(a.dash().layers.values()).find((l) => l.kind === 'effect' && l.y === 636 && l.h === 84);
-        assert.ok(cover, 'the bottom cover');
-        assert.deepStrictEqual(cover.uniforms.u_hole, [1380, 24, 80, 60], 'cut on the car: ' + cover.uniforms.u_hole);
+        const strips = FakeClient.all[2];
+        assert.strictEqual(strips.layers.size, 3);
+        popup('202', true);
+        await wait(250);
+        assert.strictEqual(strips.shown().length, 0, 'hidden under the pop-up');
+        popup('202', false);
+        await wait(1800);
+        assert.strictEqual(strips.shown().length, 3, 'back after it');
+        drive(a, 'SPORT');
+        await wait(300);
+        assert.strictEqual(counts.evas.find((e) => e.primary).activeName, 'a');
+        assert.strictEqual(strips.layers.size, 0, 'a centre design has none');
+        drive(a, 'COMFORT');
+        await wait(300);
+        assert.strictEqual(strips.layers.size, 3, 'back with C3');
+        counts.evas.forEach((e) => e.stop && e.stop());
+        assert.strictEqual(strips.layers.size, 0, 'dropped on stop');
     },
     async 'the label names the mode, in Barlow and in Matisse'() {
         const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3', dashSport: 'whole', dashEco: 'e3' });

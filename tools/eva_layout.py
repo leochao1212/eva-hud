@@ -1636,13 +1636,15 @@ def main(x, y, w, h):
     dash_e3 = attempt('dash_e3', lambda: build_dash_e3(fonts_dir, refuse))
     if skipped:
         print('SKIPPED (did not fit this font): ' + '; '.join(skipped))
-    # Cover test: high-z opaque strip over the bottom band (where BMW's status line sits) on the whole-cluster layouts.
-    # It leaves BMW's gear letter open (GEAR_LETTER, as Shadow does): covering that letter makes the kombi
-    # paint a black box over the theme.
+    # Cover test: high-z opaque strips over the bottom band (where BMW's status line sits) on the whole-cluster layouts.
+    # Three rects around BMW's gear letter (GEAR_LETTER, as Shadow does): the kombi paints its black box when a
+    # layer's rect meets that letter, whatever the layer draws there, so a see-through hole is not enough.
+    # eva_dash.js keeps botcover_* on a connection of their own, across drive-mode swaps.
+    gx, gy, gw, gh = GEAR_LETTER
     for doc in (dash, dash_d, dash_c3, dash_e3):
         if doc is not None:
-            doc['widgets'].append({'id': 'botcover', 'type': 'fill', 'x': 0, 'y': 636, 'w': 1920, 'h': 84, 'color': 'black', 'class': 'overlay', 'z': 20, 'keepInAlert': True,
-                                   'hole': list(GEAR_LETTER)})
+            for sid, x, w, h in (('botcover_l', 0, gx, 84), ('botcover_c', gx, gw, gy - 636), ('botcover_r', gx + gw, 1920 - gx - gw, 84)):
+                doc['widgets'].append({'id': sid, 'type': 'fill', 'x': x, 'y': 636, 'w': w, 'h': h, 'color': 'black', 'class': 'overlay', 'z': 20, 'keepInAlert': True})
     for f in os.listdir(fonts_dir):
         shutil.move(os.path.join(fonts_dir, f), os.path.join(APP, 'fonts', f))
     shutil.rmtree(fonts_dir)
