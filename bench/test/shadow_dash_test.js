@@ -20,6 +20,7 @@ const load = (name) => JSON.parse(fs.readFileSync(path.join(HUD, 'layouts', name
 
 const PHOTO_BYTES = 1920 * 640 * 4;
 const PIXEL_MEMORY = 16 * 1000 * 1000;   // cluster-render's, shared by all clients (PROTOCOL.md)
+const ETC2_BYTES = 1920 * 640;           // etc2rgba: 1 byte a pixel
 const CLEAR_Y = 636;   // instruments stay above BMW's bottom strip
 // BMW's gear letter in the bottom strip. Covering it makes the kombi paint a black box on top.
 const GEAR_LETTER = [1380, 660, 80, 60];
@@ -125,7 +126,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.4.5');
+        assert.strictEqual(shadow.version, '1.4.6');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);
@@ -150,22 +151,33 @@ class FakeClient {
     emit(ev, ...a) { if (this.handlers[ev]) this.handlers[ev](...a); }
     connect() { setImmediate(() => { this.ready = true; this.emit('ready'); }); }
     close() { this.ready = false; }
+    // cluster-render's pixel memory, shared by every client (PROTOCOL.md "Choosing a pixel format"):
+    // image layers and rgba assets count twice their size, compressed assets once. Past 16 MB the
+    // layer or asset is refused, as on the car.
     _add(kind, o) {
         const ref = this.nextRef++;
-        const bytes = kind === 'image' ? o.iw * o.ih * 4 * 2 : 0;
-        this.layers.set(ref, Object.assign({ kind, visible: 1, bytes }, o));
+        let bytes = 0;
+        if (kind === 'image') bytes = o.iw * o.ih * 4 * 2;
+        if (kind === 'asset') bytes = /^etc2/.test(o.format) ? o.w * o.h * (o.format === 'etc2rgb' ? 0.5 : 1) : o.w * o.h * (o.format === 'r8' ? 1 : 4) * 2;
+        this.layers.set(ref, Object.assign({ kind, visible: 1, bytes, uniforms: {}, binds: {} }, o));
+        if (this.usedBytes() + (this.reserved || 0) > PIXEL_MEMORY) {
+            this.layers.delete(ref);
+            setImmediate(() => this.emit('refused', kind === 'asset' ? 'asset' : 'layer', ref, "the service's pixel memory is full"));
+            return ref;    // the real client hands out the ref; the service refuses it later
+        }
         this.peakBytes = Math.max(this.peakBytes || 0, this.usedBytes());
         return ref;
     }
-    // cluster-render's pixel memory, shared by every client: image layers count twice their size
-    // (PROTOCOL.md "Choosing a pixel format"). Past it a layer is refused.
     usedBytes() { let n = 0; this.layers.forEach((l) => { n += l.bytes || 0; }); return n; }
     image(o) { return this._add('image', o); }
     effect(o) { return this._add('effect', o); }
+    asset(o) { return this._add('asset', o); }
     set(ref, o) { const l = this.layers.get(ref); if (l) Object.assign(l, o); }
-    uniform() {}
+    uniform(ref, name, v) { const l = this.layers.get(ref); if (l) l.uniforms[name] = v; }
+    bind(ref, sampler, asset) { const l = this.layers.get(ref); if (l) l.binds[sampler] = asset; }
     pixels(ref, rects, px) { this.sent.push({ ref, rects, px }); }
     drop(ref) { this.layers.delete(ref); }
+    photos() { return Array.from(this.layers.entries()).filter(([, l]) => l.kind === 'effect' && l.binds.u_photo); }
     targets() { return Array.from(new Set(Array.from(this.layers.values()).map((l) => l.target))); }
 }
 FakeClient.all = [];
@@ -209,11 +221,21 @@ function runtimeTests() {
             assert.strictEqual(dash.target, 'panel');
             assert.strictEqual(dash.activeName, 'shadow_comfort');
             assert.deepStrictEqual(client.targets(), ['panel']);
-            assert.strictEqual(client.layers.size, 6);  // photo, canvas, gear, three black strips
-            const photo = Array.from(client.layers.values()).find((l) => l.iw === 1920 && l.ih === 640);
-            assert.ok(photo, 'no full-cluster photo');
-            const sent = client.sent.find((s) => s.ref && client.layers.get(s.ref) === photo);
-            assert.ok(sent && sent.px && sent.px.length === PHOTO_BYTES, 'photo pixels were not uploaded');
+            // three etc2rgba photo assets, then photo (an effect), canvas, gear, three black strips
+            const assets = Array.from(client.layers.entries()).filter(([, l]) => l.kind === 'asset');
+            assert.deepStrictEqual(assets.map(([, l]) => [l.format, l.w, l.h]), [0, 1, 2].map(() => ['etc2rgba', 1920, 640]));
+            assets.forEach(([ref]) => {
+                const sent = client.sent.filter((s) => s.ref === ref);
+                assert.ok(sent.length === 1 && !sent[0].rects && sent[0].px.length === ETC2_BYTES, 'each photo goes up once, whole');
+            });
+            assert.strictEqual(client.layers.size, 9);
+            assert.ok(!Array.from(client.layers.values()).some((l) => l.kind === 'image' && l.iw === 1920 && l.ih === 640), 'no rgba photo');
+            assert.strictEqual(client.photos().length, 1, 'one photo layer');
+            const [, photo] = client.photos()[0];
+            assert.strictEqual(photo.klass, 'ambient');
+            assert.deepStrictEqual([photo.x, photo.y, photo.w, photo.h], [0, 0, 1920, 640]);
+            assert.deepStrictEqual(photo.uniforms.u_alpha, [1]);
+            assert.ok(client.usedBytes() <= 8e6, 'Shadow uses ' + (client.usedBytes() / 1e6).toFixed(1) + ' MB of the 16');
             a.drive('SPORT');
             await wait(200);
             assert.strictEqual(dash.activeName, 'shadow_sport');
@@ -231,6 +253,86 @@ function runtimeTests() {
             assert.strictEqual(dash.activeName, 'off');
             assert.strictEqual(client.layers.size, 0);
             dash.stop();
+        },
+        async 'a drive-mode swap fades the new photo in over the old one, with nothing uploaded'() {
+            const a = startApp({});
+            await wait(SETTLE_MS);
+            const dash = a.dash(), client = a.client();
+            try {
+                const assetOf = {};
+                Array.from(client.layers.entries()).filter(([, l]) => l.kind === 'asset').forEach(([ref], i) => { assetOf[['sport', 'comfort', 'eco'][i]] = ref; });
+                const [[oldRef, old]] = client.photos();
+                assert.strictEqual(old.binds.u_photo, assetOf.comfort);
+                const sentBefore = client.sent.length;
+                const alphas = [];
+                const uniform = client.uniform.bind(client);
+                client.uniform = (ref, name, v) => { if (name === 'u_alpha') alphas.push([ref, v[0]]); uniform(ref, name, v); };
+                a.drive('SPORT');
+                await wait(30);
+                const both = client.photos();
+                assert.strictEqual(both.length, 2, 'the old photo stays under the new one');
+                const [newRef, fresh] = both.find(([r]) => r !== oldRef);
+                assert.ok(newRef > oldRef, 'the new photo is the newer layer: on top at the same z');
+                assert.strictEqual(fresh.z, old.z);
+                assert.strictEqual(fresh.binds.u_photo, assetOf.sport);
+                await wait(400);
+                assert.deepStrictEqual(client.photos().map(([r]) => r), [newRef], 'the old photo is dropped after the fade');
+                const fade = alphas.filter(([r]) => r === newRef).map(([, v]) => v);
+                assert.ok(fade[0] === 0 && fade[fade.length - 1] === 1 && fade.length >= 4, 'fades 0 -> 1: ' + fade);
+                assert.ok(fade.every((v, i) => !i || v >= fade[i - 1]), 'monotonic: ' + fade);
+                const photoUploads = client.sent.slice(sentBefore).filter((s) => s.px && s.px.length >= ETC2_BYTES);
+                assert.strictEqual(photoUploads.length, 0, 'no photo pixels sent on a swap');
+                // two swaps faster than the fade: never more than two photo layers
+                a.drive('ECO PRO');
+                await wait(60);
+                a.drive('COMFORT');
+                await wait(20);
+                assert.ok(client.photos().length <= 2, client.photos().length + ' photo layers');
+                await wait(400);
+                assert.strictEqual(client.photos().length, 1);
+                assert.strictEqual(client.photos()[0][1].binds.u_photo, assetOf.comfort);
+                assert.ok(client.peakBytes <= 8e6, 'peak ' + (client.peakBytes / 1e6).toFixed(1) + ' MB');
+                // off: no layer and no asset left, so EVA gets the panel and the memory
+                a.hu.settings.set('enabled', false);
+                await wait(200);
+                assert.strictEqual(client.layers.size, 0);
+                a.hu.settings.set('enabled', true);
+                await wait(200);
+                assert.strictEqual(client.photos().length, 1, 'back on: the photo again');
+                assert.strictEqual(Array.from(client.layers.values()).filter((l) => l.kind === 'asset').length, 3);
+            } finally { dash.stop(); }
+        },
+        async 'a refused etc2 photo falls back to the rgba photo'() {
+            const a = startApp({});
+            await wait(SETTLE_MS);
+            const dash = a.dash(), client = a.client();
+            try {
+                const asset = Array.from(client.layers.entries()).find(([, l]) => l.kind === 'asset')[0];
+                client.emit('layer', asset, 'error', 'asset ' + asset + ': the renderer refused its 1920x640 etc2rgba texture');
+                await wait(200);
+                assert.strictEqual(client.photos().length, 0);
+                assert.ok(!Array.from(client.layers.values()).some((l) => l.kind === 'asset'), 'assets dropped');
+                const rgba = Array.from(client.layers.values()).filter((l) => l.kind === 'image' && l.iw === 1920 && l.ih === 640);
+                assert.strictEqual(rgba.length, 1, 'the rgba photo instead');
+                assert.ok(a.lines.some((l) => /etc2 photo refused/.test(l)), 'logged');
+            } finally { dash.stop(); }
+        },
+        async 'a layer refused for pixel memory is built again a few seconds later'() {
+            const a = startApp({});
+            await wait(SETTLE_MS);
+            const dash = a.dash(), client = a.client();
+            try {
+                client.reserved = 15e6;     // another app holds most of the memory
+                a.drive('SPORT');
+                await wait(100);
+                assert.ok(a.lines.some((l) => /pixel memory is full/.test(l)), 'a refusal was seen');
+                assert.ok(dash.memRetry.timer, 'a rebuild is scheduled');
+                client.reserved = 0;        // that app lets go
+                await wait(5400);
+                assert.ok(!dash.memRetry.timer || dash.memRetry.n >= 1, 'it built again');
+                const canvas = Array.from(client.layers.values()).find((l) => l.kind === 'image' && l.iw === 658);
+                assert.ok(canvas, 'the Sport canvas is there after the retry');
+            } finally { dash.stop(); }
         },
         async 'an iDrive 8 build is refused'() {
             const out = build('ID8');

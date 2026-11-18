@@ -40,12 +40,15 @@ class FakeClient {
     close() { this.ready = false; }
     _add(kind, o) {
         const ref = this.nextRef++;
-        this.layers.set(ref, Object.assign({ kind, visible: 1, uniforms: {} }, o));
+        this.layers.set(ref, Object.assign({ kind, visible: 1, uniforms: {}, binds: {} }, o));
         if (kind === 'image') this.buffers.set(ref, Buffer.alloc(o.iw * o.ih * 4));
+        if (kind === 'asset') this.buffers.set(ref, Buffer.alloc(o.format === 'etc2rgba' ? o.w * o.h : o.w * o.h * 4));
         return ref;
     }
     image(o) { return this._add('image', o); }
     effect(o) { return this._add('effect', o); }
+    asset(o) { return this._add('asset', o); }
+    bind(ref, sampler, asset) { const l = this.layers.get(ref); if (l) l.binds[sampler] = asset; }
     set(ref, o) { const l = this.layers.get(ref); if (l) Object.assign(l, o); }
     uniform(ref, name, v) { const l = this.layers.get(ref); if (l) l.uniforms[name] = v; }
     pixels(ref, rects, px) { this.sent.push({ ref, rects, px }); }
@@ -115,6 +118,57 @@ function show(values) {
     dash._smoothRpm(now);
     dash.widgets.forEach((x) => dash._update(x, now, true));
     FakeClient.all[0].absorb();
+}
+
+/* etc2rgba (ETC1 individual / differential colour + EAC alpha), as tools/etc2.py writes it. */
+const ETC1 = [[2, 8], [5, 17], [9, 29], [13, 42], [18, 60], [24, 80], [33, 106], [47, 183]];
+const EAC = [[-3, -6, -9, -15, 2, 5, 8, 14], [-3, -7, -10, -13, 2, 6, 9, 12], [-2, -5, -8, -13, 1, 4, 7, 12],
+    [-2, -4, -6, -13, 1, 3, 5, 12], [-3, -6, -8, -12, 2, 5, 7, 11], [-3, -7, -9, -11, 2, 6, 8, 10],
+    [-4, -7, -8, -11, 3, 6, 7, 10], [-3, -5, -8, -11, 2, 4, 7, 10], [-2, -6, -8, -10, 1, 5, 7, 9],
+    [-2, -5, -8, -10, 1, 4, 7, 9], [-2, -4, -8, -10, 1, 3, 7, 9], [-2, -5, -7, -10, 1, 4, 6, 9],
+    [-3, -4, -7, -10, 2, 3, 6, 9], [-1, -2, -3, -10, 0, 1, 2, 9], [-4, -6, -8, -9, 3, 5, 7, 8],
+    [-3, -5, -7, -9, 2, 4, 6, 8]];
+const etc2Cache = new WeakMap();
+function etc2Decode(data, w, h) {
+    if (etc2Cache.has(data)) return Buffer.from(etc2Cache.get(data));
+    const out = Buffer.alloc(w * h * 4);
+    const clamp = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
+    const bw = w / 4;
+    for (let bi = 0; bi < (w / 4) * (h / 4); bi++) {
+        const o = bi * 16, bx = (bi % bw) * 4, by = Math.floor(bi / bw) * 4;
+        const aHi = data.readUInt32BE(o), aLo = data.readUInt32BE(o + 4);
+        const base = aHi >>> 24, mul = (aHi >>> 20) & 15, tab = (aHi >>> 16) & 15;
+        const hi = data.readUInt32BE(o + 8), lo = data.readUInt32BE(o + 12);
+        const diff = (hi >>> 1) & 1, flip = hi & 1;
+        const c1 = [], c2 = [];
+        for (let ch = 0; ch < 3; ch++) {
+            const byte = (hi >>> (24 - 8 * ch)) & 255;
+            if (diff) {
+                const q = byte >>> 3; let d = byte & 7; if (d >= 4) d -= 8;
+                const q2 = q + d;
+                c1.push((q << 3) | (q >>> 2)); c2.push((q2 << 3) | (q2 >>> 2));
+            } else {
+                c1.push((byte >>> 4) * 17); c2.push((byte & 15) * 17);
+            }
+        }
+        const t1 = (hi >>> 5) & 7, t2 = (hi >>> 2) & 7;
+        for (let p = 0; p < 16; p++) {
+            const x = p >> 2, y = p & 3;
+            const second = flip ? y >= 2 : x >= 2;
+            const m = (((lo >>> (16 + p)) & 1) << 1) | ((lo >>> p) & 1);
+            const t = ETC1[second ? t2 : t1];
+            const mod = [t[0], t[1], -t[0], -t[1]][m];
+            const c = second ? c2 : c1;
+            // alpha index p: 3 bits from bit 45 - 3p of the 64-bit alpha word
+            const bit = 45 - 3 * p;
+            const ai = bit >= 32 ? (aHi >>> (bit - 32)) & 7 : bit >= 30 ? (((aHi << (32 - bit)) | (aLo >>> bit)) & 7) : (aLo >>> bit) & 7;
+            const di = ((by + y) * w + bx + x) * 4;
+            out[di] = clamp(c[0] + mod); out[di + 1] = clamp(c[1] + mod); out[di + 2] = clamp(c[2] + mod);
+            out[di + 3] = clamp(base + EAC[tab][ai] * mul);
+        }
+    }
+    etc2Cache.set(data, out);
+    return Buffer.from(out);
 }
 
 function over(dst, dx, dy, src, sw, sh) {
@@ -217,6 +271,13 @@ function frame() {
         if (l.kind === 'image') {
             const buf = client.buffers.get(l.ref);
             if (buf) over(dst, l.x, l.y, buf, l.iw, l.ih);
+        } else if (l.kind === 'effect' && l.binds && l.binds.u_photo) {
+            // the photo effect: the etc2rgba asset as the car decodes it, times u_alpha
+            const a = client.layers.get(l.binds.u_photo);
+            const px = etc2Decode(client.buffers.get(l.binds.u_photo), a.w, a.h);
+            const k = l.uniforms.u_alpha ? Number(l.uniforms.u_alpha[0]) : 1;
+            if (k < 1) for (let i = 3; i < px.length; i += 4) px[i] = Math.round(px[i] * k);
+            over(dst, l.x, l.y, px, a.w, a.h);
         } else if (l.kind === 'effect') {
             if (!paintFill(dst, l)) paintBar(dst, l);
         }

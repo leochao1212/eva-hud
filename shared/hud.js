@@ -79,6 +79,7 @@ const shaders = require('./shaders');
 const Car = require('./kit/car');
 
 const BOOST_SCALE = { factor: 0.01, offset: 0, invalid: 255 }; // see header comment
+const MEM_RETRY_MS = [5000, 10000, 20000, 30000, 30000];
 const TICK_MS = 50;              // 20 Hz: shift bar and gauges
 const TEXT_MS = 200;             // text re-draws at most 5 times a second (what BMW's own readouts do)
 const DEFAULT_LOCATION = { lat: 35.2271, lon: -80.8431 }; // Charlotte, NC: for the Auto theme's sunset
@@ -158,6 +159,7 @@ class HudApp {
         this.themeName = null;
         this.flash = false;
         this.problem = null;             // why nothing shows (a bad layout), for the status line
+        this.memRetry = { timer: null, n: 0 };   // rebuilds after cluster-render's pixel memory was full
         this.statusListeners = [];
         this.lastStatus = null;
 
@@ -217,6 +219,7 @@ class HudApp {
         this.client.on('layer', (ref, state, reason) => {
             const old = this.layerStates.get(ref);
             this.layerStates.set(ref, { state, reason });
+            if (state === 'error') this._onRefused('layer', ref, reason);
             if (state === 'error' || ((state === 'waiting' || state === 'stalled') && (!old || old.state !== state))) {
                 const w = this._widgetOf(ref);
                 this.log.warn('layer ' + ref + (w ? ' (' + w + ')' : '') + ' ' + state + (reason ? ': ' + reason : ''));
@@ -233,9 +236,32 @@ class HudApp {
             const w = this._widgetOf(ref);
             this.log.warn('refused ' + op + ' on ' + ref + (w ? ' (' + w + ')' : '') + ': ' + reason);
             if (!this.refused) this.refused = (w || op) + ': ' + reason;   // the first one, until the next rebuild
+            if (/pixel memory is full/.test(reason || '')) this._retryForMemory();
+            this._onRefused(op, ref, reason);
             this._statusSoon();
         });
         this.client.on('budget', (capKb, maxKb, reason) => this.log.info('budget ' + capKb + '/' + maxKb + ' kb/s (' + reason + ')'));
+    }
+
+    /** A subclass's hook for a refused message or a layer in error (its own layers and assets). */
+    _onRefused() {}
+
+    /**
+     * cluster-render's 16 MB of pixel memory is shared by every app. A layer refused because it was
+     * full stays refused, so a layout drawn while another app held the memory stays incomplete even
+     * after that app lets go. Build again after 5, 10, 20, 30 and 30 s; a rebuild for any other
+     * reason starts the count again.
+     */
+    _retryForMemory() {
+        const r = this.memRetry;
+        if (r.timer || r.n >= MEM_RETRY_MS.length) return;
+        const ms = MEM_RETRY_MS[r.n];
+        this.log.warn('pixel memory full: building again in ' + (ms / 1000) + ' s');
+        r.timer = setTimeout(() => {
+            r.timer = null;
+            r.n++;
+            this._rebuild(true);
+        }, ms);
     }
 
     start() {
@@ -282,6 +308,7 @@ class HudApp {
     }
 
     stop() {
+        clearTimeout(this.memRetry.timer);
         clearInterval(this.tickTimer);
         clearInterval(this.themeTimer);
         clearInterval(this.statusTimer);
@@ -481,7 +508,8 @@ class HudApp {
         if (this.layouts) this.layouts.size = sz;
     }
 
-    _rebuild() {
+    _rebuild(memRetry) {
+        if (!memRetry) { clearTimeout(this.memRetry.timer); this.memRetry = { timer: null, n: 0 }; }
         this._guard('rebuild', () => this._rebuildInner());
         this._status();
     }

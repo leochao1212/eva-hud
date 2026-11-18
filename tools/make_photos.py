@@ -16,6 +16,8 @@ from PIL import Image, ImageDraw
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from shadow_geom import ACCENT, BOTTOM_FADE_Y, NAVY, PHOTO_FIT, PHOTO_H, PHOTO_W, layout  # noqa: E402
+import etc2  # noqa: E402
+import numpy as np  # noqa: E402
 
 SRC = os.path.join(HERE, 'photos-src')
 OUT = os.path.join(HERE, '..', 'apps', 'shadow_dash', 'hud', 'photos')
@@ -105,11 +107,14 @@ def build(mode):
     if len(raw) != PHOTO_W * PHOTO_H * 4:
         raise SystemExit('%s rgba is %d bytes' % (mode, len(raw)))
     open(os.path.join(OUT, mode + '.rgba'), 'wb').write(raw)
+    # the copy the app sends: etc2rgba, 1 byte a pixel, charged once to cluster-render's pixel memory
+    open(os.path.join(OUT, mode + '.etc2'), 'wb').write(
+        etc2.encode(np.frombuffer(raw, np.uint8).reshape(PHOTO_H, PHOTO_W, 4)))
     print(mode, 'ok', 'speed', speed['x'], speed['y'], speed['w'], speed['h'])
 
 
 def main():
-    for mode in MODES:
+    for mode in (sys.argv[1:] or MODES):
         build(mode)
 
 
