@@ -19,6 +19,7 @@ const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 const load = (name) => JSON.parse(fs.readFileSync(path.join(HUD, 'layouts', name + '.json'), 'utf8'));
 
 const PHOTO_BYTES = 1920 * 640 * 4;
+const PIXEL_MEMORY = 16 * 1000 * 1000;   // cluster-render's, shared by all clients (PROTOCOL.md)
 const CLEAR_Y = 636;   // instruments stay above BMW's bottom strip
 // BMW's gear letter in the bottom strip. Covering it makes the kombi paint a black box on top.
 const GEAR_LETTER = [1380, 660, 80, 60];
@@ -124,7 +125,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.4.4');
+        assert.strictEqual(shadow.version, '1.4.5');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);
@@ -153,8 +154,12 @@ class FakeClient {
         const ref = this.nextRef++;
         const bytes = kind === 'image' ? o.iw * o.ih * 4 * 2 : 0;
         this.layers.set(ref, Object.assign({ kind, visible: 1, bytes }, o));
+        this.peakBytes = Math.max(this.peakBytes || 0, this.usedBytes());
         return ref;
     }
+    // cluster-render's pixel memory, shared by every client: image layers count twice their size
+    // (PROTOCOL.md "Choosing a pixel format"). Past it a layer is refused.
+    usedBytes() { let n = 0; this.layers.forEach((l) => { n += l.bytes || 0; }); return n; }
     image(o) { return this._add('image', o); }
     effect(o) { return this._add('effect', o); }
     set(ref, o) { const l = this.layers.get(ref); if (l) Object.assign(l, o); }
@@ -219,52 +224,13 @@ function runtimeTests() {
             a.drive('ECO PRO');
             await wait(200);
             assert.strictEqual(dash.activeName, 'shadow_eco');
+            // every swap included: Shadow alone must leave room in the 16 MB for EVA and the other apps
+            assert.ok(client.peakBytes <= PIXEL_MEMORY, 'pixel memory peak ' + (client.peakBytes / 1e6).toFixed(1) + ' MB > 16 MB');
             a.hu.settings.set('enabled', false);
             await wait(200);
             assert.strictEqual(dash.activeName, 'off');
             assert.strictEqual(client.layers.size, 0);
             dash.stop();
-        },
-        async 'a drive-mode swap keeps the old photo until the new one is drawn, then fades it out'() {
-            const a = startApp({});
-            await wait(SETTLE_MS);
-            const dash = a.dash(), client = a.client();
-            const photos = () => Array.from(client.layers.entries()).filter(([, l]) => l.iw === 1920 && l.ih === 640).map(([r]) => r);
-            const ops = [];
-            const set = client.set.bind(client);
-            client.set = (ref, o) => { if ('opacity' in o) ops.push([ref, o.opacity]); set(ref, o); };
-            try {
-                const [oldRef] = photos();
-                a.drive('SPORT');
-                await wait(200);
-                assert.strictEqual(dash.activeName, 'shadow_sport');
-                assert.deepStrictEqual(photos().length, 2, 'the old photo stays while the new one uploads');
-                assert.strictEqual(client.layers.get(oldRef).z, 1, 'the old photo is above the new one');
-                const newRef = dash.widgets.get('bg').ref;
-                assert.strictEqual(client.layers.get(newRef).z, 0);
-                assert.ok(!ops.some(([r]) => r === oldRef), 'no fade before the new photo is drawn');
-                assert.strictEqual(client.layers.size, 7, 'one layer more than usual during the swap');
-                client.emit('layer', newRef, 'shown');
-                await wait(450);
-                assert.deepStrictEqual(photos(), [newRef], 'the old photo is dropped after its fade');
-                const fade = ops.filter(([r]) => r === oldRef).map(([, v]) => v);
-                assert.ok(fade.length >= 2 && fade.every((v, i) => v < 1 && (i === 0 || v <= fade[i - 1])), 'old photo fades out: ' + fade);
-                assert.strictEqual(client.layers.size, 6);
-                // two swaps in a row before the first new photo is drawn: the visible one stays, never three photos
-                client.emit('layer', newRef, 'shown');
-                a.drive('ECO PRO');
-                await wait(100);
-                const ecoRef = dash.widgets.get('bg').ref;
-                a.drive('COMFORT');
-                await wait(100);
-                assert.ok(photos().length <= 2, 'at most two photos: ' + photos().length);
-                assert.ok(photos().indexOf(newRef) >= 0, 'the drawn Sport photo stays while Comfort uploads');
-                assert.ok(photos().indexOf(ecoRef) < 0, 'the undrawn Eco photo is dropped');
-                // switching Shadow off drops everything at once
-                a.hu.settings.set('enabled', false);
-                await wait(200);
-                assert.strictEqual(client.layers.size, 0);
-            } finally { dash.stop(); }
         },
         async 'an iDrive 8 build is refused'() {
             const out = build('ID8');
