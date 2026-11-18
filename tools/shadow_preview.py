@@ -62,7 +62,7 @@ def main(out):
             # Check worst-case speed and gear captions too, not just the still.
             samples = [text]
             if p['id']=='spd': samples += ['0','118','199','299']
-            if p['id']=='gearcap': samples += ['STANDBY MODE','REVERSE GEAR'] if mode!='eco' else []
+            if p['id']=='gearcap': samples += ['STANDBY MODE','REVERSE GEAR']
             if p['id']=='gearjp': samples += ['待命状態','後退操作']
             if p['id']=='system': samples += ['SYSTEM // 待命状態','SYSTEM // 後退操作']
             for sample in samples:

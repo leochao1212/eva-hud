@@ -13,9 +13,9 @@ Campaign orange `#FF6A00` marks the frame and hazard strip; Comfort's unlit bar
 uses navy `#14284B`. Red appears only in lit 7000–8000 rpm segments. The bar has
 32 segments of 250 rpm, so the redline starts exactly at segment 28.
 
-Sport and Comfort put RANGE, WATER / 水温, and TIME captions above three separate
-readings. Eco reserves the entire 412px field for its RPM bar, stacks the large
-gear frame beside range and time, and retains space for a three-digit speed.
+All three modes put RANGE, WATER / 水温, and TIME captions above three separate
+readings. Eco's picture is scaled to the panel height (1707x640) and moved 40px
+left, so its slogan ends near x=1240 and Eco uses Comfort's 612px column.
 The gear shows the actual D/M/S drive letter and numeral, or P/R/N alone, including
 while stopped. It inherits neither shift-point red nor animated glyph scaling.
 

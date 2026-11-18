@@ -11,13 +11,17 @@ PANEL_H, CLEAR_Y, RIGHT = 720, 636, 1896
 # (bimmer-lab/apps apps/cluster_themes/hud/layouts/minimal.json) and covers the
 # rest of that band. The letter itself stays BMW's.
 GEAR_LETTER = (1380, 660, 80, 60)
-ART_RIGHT = {'sport': 1172, 'comfort': 1248, 'eco': 1452}
-FADE = {'sport': 1060, 'comfort': 1180, 'eco': 1360}
+ART_RIGHT = {'sport': 1172, 'comfort': 1248, 'eco': 1240}
+FADE = {'sport': 1060, 'comfort': 1180, 'eco': 1190}
+# Eco's slogan ran to x=1452 at full width and left a 412px column. Its photo is
+# scaled to the panel height instead (1707x640) and moved 40px left, so the
+# slogan ends near x=1240 and Eco gets Comfort's 612px column.
+PHOTO_FIT = {'eco': ('height', 40)}
 BOTTOM_FADE_Y = 576
 ACCENT = {mode: (255, 106, 0) for mode in ART_RIGHT}
 NAVY = (20, 40, 75)
 SEGMENTS, RED_FROM = 32, 28  # exact 7000..8000 zone: 250 rpm per segment
-ORIGIN = {'sport': 1238, 'comfort': 1284, 'eco': 1484}
+ORIGIN = {'sport': 1238, 'comfort': 1284, 'eco': 1284}
 CELLS = {'sq_speed': 179, 'sqs_speed': 119, 'd_label': 29, 'd_unit': 27,
          'd_line': 30, 'd_num42': 73, 'sqs_num64': 52, 'time70': 54}
 
@@ -88,7 +92,6 @@ def _overlaps(parts):
 
 def layout(mode):
     x, width = ORIGIN[mode], RIGHT-ORIGIN[mode]
-    wide = mode != 'eco'
     speed_font = 'sq_speed' if mode=='sport' else 'sqs_speed'
     pad = 26 if mode=='sport' else 20
     speed_w = (348 if mode=='sport' else 231)+2*pad
@@ -97,48 +100,25 @@ def layout(mode):
     parts += [_text('spd_l','SPEED  速度','d_label',x,76,180),
               _text('spd','{{speed}}',speed_font,x,speed_y,speed_w,
                     h=CELLS[speed_font]+2*pad,textX=pad,offsetY=pad,glow=True)]
-    if wide:
-        fx = x+424 if mode=='sport' else x+328
-        fw,fy,fh = RIGHT-fx,76,304
-        parts += [_text('spd_u','{{u:speed}}','d_unit',x+pad,speed_y+CELLS[speed_font]+2*pad+4,80,color='dim'),
-                  _text('gearcap','{{gearcap}}','d_unit',fx+16,fy+14,fw-32,color='dim'),
-                  _text('gearjp','{{gearcapjp}}','d_label',fx+16,fy+46,fw-32),
-                  _text('gearsub','UNIT-01','d_unit',fx+16,fy+fh-36,78,color='dim'),
-                  _text('gearsync','{{sync}}%','d_unit',fx+fw-92,fy+fh-36,76,align='right',color='dim')]
-        gear = dict(id='gear',type='evagear',driveLetter=True,fontPrefix='',
-                    x=fx+14,y=fy+80,w=fw-28,h=182,class_='overlay',z=12)
-        bar_y,bar_h = 400,32
-        rpm_y,rpm_x,rpm_w,rpm_font = 444,x+96,200,'d_num42'
-        parts += [_text('rpm_l','RPM','d_label',x,477,68,color='dim'),
-                  _text('rpm_jp','回転数','d_line',x+316,477,80,color='dim'),
-                  _text('rpm_max','8000 / MIN','d_unit',RIGHT-104,479,104,align='right',color='dim')]
-    else:
-        # Full three-digit speed capacity; the rpm bar occupies all 412px.
-        parts.append(_text('spd_u','{{u:speed}}','d_unit',x+speed_w+10,212,70,color='dim'))
-        bar_y,bar_h = 280,30
-        rpm_y,rpm_x,rpm_w,rpm_font = 326,x+100,132,'sqs_num64'
-        parts += [_text('rpm_l','RPM','d_label',x,347,64,color='dim'),
-                  _text('rpm_jp','回転数','d_line',RIGHT-80,348,80,color='dim')]
-        fx,fy,fw,fh = x,396,188,232
-        parts += [_text('gearcap','GEAR','d_unit',fx+14,fy+14,54,color='dim'),
-                  _text('gearjp','{{gearcapjp}}','d_label',fx+76,fy+12,96)]
-        gear = dict(id='gear',type='evagear',driveLetter=True,fontPrefix='',
-                    x=fx+10,y=fy+46,w=fw-20,h=182,class_='overlay',z=12)
+    fx = x+424 if mode=='sport' else x+328
+    fw,fy,fh = RIGHT-fx,76,304
+    parts += [_text('spd_u','{{u:speed}}','d_unit',x+pad,speed_y+CELLS[speed_font]+2*pad+4,80,color='dim'),
+              _text('gearcap','{{gearcap}}','d_unit',fx+16,fy+14,fw-32,color='dim'),
+              _text('gearjp','{{gearcapjp}}','d_label',fx+16,fy+46,fw-32),
+              _text('gearsub','UNIT-01','d_unit',fx+16,fy+fh-36,78,color='dim'),
+              _text('gearsync','{{sync}}%','d_unit',fx+fw-92,fy+fh-36,76,align='right',color='dim')]
+    gear = dict(id='gear',type='evagear',driveLetter=True,fontPrefix='',
+                x=fx+14,y=fy+80,w=fw-28,h=182,class_='overlay',z=12)
+    bar_y,bar_h = 400,32
+    rpm_y,rpm_x,rpm_w,rpm_font = 444,x+96,200,'d_num42'
+    parts += [_text('rpm_l','RPM','d_label',x,477,68,color='dim'),
+              _text('rpm_jp','回転数','d_line',x+316,477,80,color='dim'),
+              _text('rpm_max','8000 / MIN','d_unit',RIGHT-104,479,104,align='right',color='dim')]
     parts += _brackets(fx,fy,fw,fh)
     parts += [dict(id='segs',type='segs',count=SEGMENTS,redFrom=RED_FROM,
                    x=x,y=bar_y,w=width,h=bar_h,quads=_segments(width,bar_h)),
               _text('rpm','{{rpm}}',rpm_font,rpm_x,rpm_y,rpm_w)]
-    if wide:
-        parts += _footer(x,width)
-    else:
-        rx = fx+fw+24
-        parts += [_rule('range_rule',rx,396,RIGHT-rx),
-                  _text('rng_l','RANGE','d_label',rx,408,RIGHT-rx,color='dim'),
-                  _text('rng','{{range}}','sqs_num64',rx,448,126),
-                  _text('rng_u','{{u:range}}','d_unit',rx+132,473,34,color='dim'),
-                  _rule('time_rule',rx,526,RIGHT-rx),
-                  _text('clk_l','TIME','d_label',rx,538,RIGHT-rx,color='dim'),
-                  _text('clk','{{time}}','time70',rx,578,182)]
+    parts += _footer(x,width)
     gear['class'] = gear.pop('class_')
     _overlaps(parts)
     for p in parts+[gear]:

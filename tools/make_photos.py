@@ -15,11 +15,22 @@ from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from shadow_geom import ACCENT, BOTTOM_FADE_Y, NAVY, PHOTO_H, PHOTO_W, layout  # noqa: E402
+from shadow_geom import ACCENT, BOTTOM_FADE_Y, NAVY, PHOTO_FIT, PHOTO_H, PHOTO_W, layout  # noqa: E402
 
 SRC = os.path.join(HERE, 'photos-src')
 OUT = os.path.join(HERE, '..', 'apps', 'shadow_dash', 'hud', 'photos')
 MODES = ('sport', 'comfort', 'eco')
+
+def fit_height(im, dx):
+    """Scale to the panel height, drop dx px off the left, black to the right of the picture."""
+    im = im.convert('RGBA')
+    w, h = im.size
+    nw = max(1, int(round(w * (PHOTO_H / float(h)))))
+    im = im.resize((nw, PHOTO_H), Image.LANCZOS)
+    canvas = Image.new('RGBA', (PHOTO_W, PHOTO_H), (0, 0, 0, 255))
+    canvas.paste(im.crop((dx, 0, min(nw, dx + PHOTO_W), PHOTO_H)), (0, 0))
+    return canvas
+
 
 def fit_panel(im):
     im = im.convert('RGBA')
@@ -75,7 +86,8 @@ def build(mode):
     src = os.path.join(SRC, mode + '.png')
     if not os.path.isfile(src):
         raise SystemExit('missing %s' % src)
-    base = fit_panel(Image.open(src))
+    fit = PHOTO_FIT.get(mode)
+    base = fit_height(Image.open(src), fit[1]) if fit else fit_panel(Image.open(src))
     spec = layout(mode)
     speed = next(p for p in spec['parts'] if p['id'] == 'spd')
     # fully black by the time the instruments start, so the panel below the photo matches

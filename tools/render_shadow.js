@@ -270,7 +270,7 @@ async function main() {
         writeRaw(path.join(OUT, mode + '.rgba'), frame());
         console.log('still', mode);
         // Exercise real gear atlases at every selector state, including the
-        // narrow Eco frame. A gear change must keep an empty, transparent edge.
+        // Eco frame. A gear change must keep an empty, transparent edge.
         const gear = Array.from(dash.widgets.values()).find((x) => x.w.type === 'evagear').w;
         for (const stage of ['D', 'M', 'S', 'P', 'R', 'N', undefined]) {
             for (const digit of [0, 4, 8]) {

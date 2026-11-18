@@ -23,14 +23,14 @@ const CLEAR_Y = 636;   // instruments stay above BMW's bottom strip
 // BMW's gear letter in the bottom strip. Covering it makes the kombi paint a black box on top.
 const GEAR_LETTER = [1380, 660, 80, 60];
 // art ends left of these x values on the cropped 1920x640 photo
-const SAFE_X = { sport: 1190, comfort: 1270, eco: 1460 };
+const SAFE_X = { sport: 1190, comfort: 1270, eco: 1260 };
 const READINGS = {
     sport: ['{{speed}}', '{{rpm}}', '{{range}}', '{{coolant}}', '{{time}}'],
     comfort: ['{{speed}}', '{{rpm}}', '{{range}}', '{{coolant}}', '{{time}}'],
-    eco: ['{{speed}}', '{{rpm}}', '{{range}}', '{{time}}'],
+    eco: ['{{speed}}', '{{rpm}}', '{{range}}', '{{coolant}}', '{{time}}'],
 };
 const SPEED_FONT = { sport: 'sq_speed', comfort: 'sqs_speed', eco: 'sqs_speed' };
-const RPM_FONT = { sport: 'd_num42', comfort: 'd_num42', eco: 'sqs_num64' };
+const RPM_FONT = { sport: 'd_num42', comfort: 'd_num42', eco: 'd_num42' };
 function build(hmi) {
     return execFileSync(process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3'),
         ['-X', 'utf8', 'kit/tools/build.py', 'shadow_dash'], {
@@ -124,7 +124,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.4.2');
+        assert.strictEqual(shadow.version, '1.4.3');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);
