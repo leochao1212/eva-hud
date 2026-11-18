@@ -40,14 +40,16 @@ class FakeClient {
     close() { this.ready = false; }
     _add(kind, o) {
         const ref = this.nextRef++;
-        if (this.layers.size >= 8) { this.refused.push(o.target + ': too many layers'); return ref; }
-        const bytes = kind === 'image' ? o.iw * o.ih * 4 * 2 : 0;
+        if (kind !== 'asset' && Array.from(this.layers.values()).filter((l) => l.kind !== 'asset').length >= 8) { this.refused.push(o.target + ': too many layers'); return ref; }
+        const bytes = kind === 'image' ? o.iw * o.ih * 4 * 2 : kind === 'asset' ? o.w * o.h * 4 * 2 : 0;
         if (FakeClient.memory() + bytes > 16 * 1024 * 1024) { this.refused.push(o.target + ': pixel memory is full'); return ref; }
         this.layers.set(ref, Object.assign({ kind, visible: 1, bytes }, o));
         return ref;
     }
     image(o) { return this._add('image', o); }
     effect(o) { return this._add('effect', o); }
+    asset(o) { return this._add('asset', Object.assign({ iw: o.w, ih: o.h }, o)); }     // not a layer: outside the eight, inside the 16 MiB
+    bind(ref, sampler, asset) { const l = this.layers.get(ref); if (l) (l.binds = l.binds || {})[sampler] = asset; }
     set(ref, o) { Object.assign(this.layers.get(ref) || {}, o); }
     uniform(ref, name, v) { this.uniformCalls++; const l = this.layers.get(ref); if (l) (l.uniforms = l.uniforms || {})[name] = v; }
     uniformsOf(test) { const l = Array.from(this.layers.values()).find(test); return (l && l.uniforms) || {}; }
@@ -1813,6 +1815,87 @@ const tests = {
         assert.strictEqual(dash.activeName, 'eva');
         assert.ok(!fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/layouts/dash_shadow_sport.json')));
         counts.evas.forEach((e) => e.stop && e.stop());
+    },
+    async 'a drive-mode change between whole designs: hexagons in, the design swaps under them, hexagons out'() {
+        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3', dashSport: 'whole', dashEco: 'e3' });
+        await wait(SETTLE_MS);
+        const d = counts.evas.find((e) => e.primary), c = a.dash();
+        assert.strictEqual(d.activeName, 'c3');
+        const cover = () => Array.from(c.layers.entries()).find(([, l]) => l.kind === 'effect' && l.klass === 'alert' && /u_t/.test(l.fs || ''));
+        const label = () => Array.from(c.layers.values()).find((l) => l.kind === 'asset');
+        let most = 0;
+        const add = c._add.bind(c);
+        c._add = (k, o) => { const r = add(k, o); most = Math.max(most, Array.from(c.layers.values()).filter((x) => x.kind !== 'asset').length); return r; };
+        drive(a, 'SPORT');
+        await wait(150);
+        assert.ok(cover(), 'hexagons over the old design');
+        assert.strictEqual(d.activeName, 'c3', 'the old design stays until covered');
+        const [, hex] = cover();
+        assert.ok(hex.uniforms.u_t[0] > 0 && hex.uniforms.u_t[0] < 1, 'sweeping in: ' + hex.uniforms.u_t);
+        assert.deepStrictEqual([hex.x, hex.y], [0, 0]);
+        assert.ok(hex.w > 1800 && hex.h >= 600, 'covers the designs: ' + hex.w + 'x' + hex.h);
+        await wait(450);
+        assert.strictEqual(d.activeName, 'eva', 'swapped under the hexagons');
+        assert.strictEqual(cover()[1].uniforms.u_t[0], 1, 'fully covered while it swaps');
+        const l = label();
+        assert.ok(l && l.w === 720 && l.h === 132 && l.format === 'rgba8', 'the mode label, an asset');
+        const hx = cover()[1];
+        assert.strictEqual(hx.binds.u_label, Array.from(c.layers.entries()).find(([, x]) => x === l)[0], 'drawn by the hexagons');
+        assert.deepStrictEqual(hx.uniforms.u_labelOn, [1], 'shown while covered');
+        const lr = hx.uniforms.u_labelRect;
+        assert.ok(Math.abs(lr[0] + lr[2] / 2 - hex.w / 2) <= 1 && Math.abs(lr[1] + lr[3] / 2 - hex.h / 2) <= 1, 'label centred: ' + lr);
+        d.widgets.forEach((x) => c.emit('layer', x.ref, 'shown'));     // the new design is drawn
+        await wait(400);
+        assert.ok(cover() && cover()[1].uniforms.u_t[0] > 1, 'sweeping out: ' + (cover() && cover()[1].uniforms.u_t));
+        assert.deepStrictEqual(cover()[1].uniforms.u_labelOn, [0], 'the label goes before the sweep out');
+        await wait(500);
+        assert.ok(!cover(), 'hexagons gone');
+        assert.ok(!label(), 'label asset gone');
+        assert.strictEqual(c.layers.size, d.widgets.size, 'only the new design is left');
+        assert.ok(most <= 8, most + ' layers at once');
+        assert.deepStrictEqual(c.refused, [], 'nothing refused (layers, memory)');
+    },
+    async 'the label names the mode, in Barlow and in Matisse'() {
+        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3', dashSport: 'whole', dashEco: 'e3' });
+        await wait(SETTLE_MS);
+        const c = a.dash();
+        let most = 0;
+        const add = c._add.bind(c);
+        c._add = (k, o) => { const r = add(k, o); most = Math.max(most, Array.from(c.layers.values()).filter((x) => x.kind !== 'asset').length); return r; };
+        drive(a, 'ECO PRO');      // C3 -> E3: seven layers each, the change adds one
+        await wait(600);
+        assert.ok(most <= 8, most + ' layers');
+        assert.deepStrictEqual(c.refused, []);
+        const [ref, l] = Array.from(c.layers.entries()).find(([, x]) => x.kind === 'asset');
+        const px = imageOf(c, ref);
+        let orange = 0, white = 0;
+        for (let i = 0; i < px.length; i += 4) {
+            if (px[i] > 240 && px[i + 1] > 120 && px[i + 1] < 150 && px[i + 2] < 20) orange++;
+            if (px[i] > 240 && px[i + 1] > 240 && px[i + 2] > 240) white++;
+        }
+        assert.ok(orange > 2000, 'orange DRIVE MODE >> ECO PRO: ' + orange);
+        assert.ok(white > 500, 'white 活動限界: ' + white);
+        assert.strictEqual(l.w * l.h * 4, px.length);
+    },
+    async 'with the animation off, or a centre design, the design swaps at once'() {
+        for (const values of [{ dashComfort: 'c3', dashSport: 'whole', dashTransition: false }, { dashComfort: 'a', dashSport: 'b' }, { dashComfort: 'c3', dashSport: 'a' }]) {
+            const a = startApp(Object.assign({ screens: 'dash', demo: 'off' }, values));
+            await wait(SETTLE_MS);
+            const d = counts.evas.find((e) => e.primary), c = a.dash();
+            const before = d.activeName;
+            drive(a, 'SPORT');
+            await wait(120);
+            assert.notStrictEqual(d.activeName, before, JSON.stringify(values) + ': swapped at once');
+            assert.ok(!Array.from(c.layers.values()).some((l) => /u_t/.test(l.fs || '')), JSON.stringify(values) + ': no hexagons');
+        }
+    },
+    async 'turning the animation on or off rebuilds nothing'() {
+        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3' });
+        await wait(SETTLE_MS);
+        const c = a.dash(), refs = Array.from(c.layers.keys()).join(',');
+        a.set('dashTransition', false);
+        await wait(150);
+        assert.strictEqual(Array.from(c.layers.keys()).join(','), refs);
     },
     async 'a dash that cannot start leaves the HUD running and says so'() {
         const a = startApp({ screens: 'both' }, { dashThrows: true });

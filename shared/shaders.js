@@ -567,4 +567,55 @@ void main() {
 }
 `;
 
-module.exports = { evarings: EVARINGS, evaseven: EVASEVEN, evahazard: EVAHAZARD, evahex: EVAHEX, evacorners: EVACORNERS, evasolo: EVASOLO, shiftbar: SHIFTBAR, arc: ARC, revbar: REVBAR, lights: LIGHTS, fill: FILL, box: BOX, grid: GRID, evaseg: EVASEG, evaframe: EVAFRAME };
+const EVAHEXWIPE = `// The dash's drive-mode change: orange hexagons sweep in from the left until they cover the
+// layer, then sweep out to the left again. No pixels: one uniform, u_t, moves it.
+//   u_t     0..1 the sweep in (0: nothing, 1: covered), 1..2 the sweep out (2: nothing again)
+//   u_size  layer px, u_cell a hexagon's side px, u_color the hexagons' rgb, u_dark the gaps' rgb
+//   u_label an rgba8 asset drawn over the hexagons at u_labelRect (x, y, w, h px) while u_labelOn is 1:
+//           the mode's name, in this layer so the change costs one layer, not two
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying vec2 v_uv;
+uniform vec2 u_size;
+uniform float u_cell;
+uniform float u_t;
+uniform vec3 u_color;
+uniform vec3 u_dark;
+uniform sampler2D u_label;
+uniform vec4 u_labelRect;
+uniform float u_labelOn;
+
+void main() {
+    vec2 p = v_uv * u_size / u_cell;
+    vec2 s = vec2(1.7320508, 3.0);
+    vec2 a = mod(p, s) - s * 0.5;
+    vec2 b = mod(p - s * 0.5, s) - s * 0.5;
+    vec2 g = dot(a, a) < dot(b, b) ? a : b;            // from the nearest hexagon's centre
+    float x = clamp((p.x - g.x) * u_cell / u_size.x, 0.0, 1.0);   // that centre, 0..1 across the layer
+    const float SPREAD = 0.35;
+    float k = u_t <= 1.0
+        ? smoothstep(0.0, 1.0, (u_t * (1.0 + SPREAD) - x) / SPREAD)
+        : 1.0 - smoothstep(0.0, 1.0, ((u_t - 1.0) * (1.0 + SPREAD) - x) / SPREAD);
+    vec2 q = abs(g);
+    float r = max(q.x, q.x * 0.5 + q.y * 0.8660254);   // 0 at the centre, 0.866 at the cell's edge
+    float size = 0.8660254 * 0.86 * k;                  // the hexagon grows with k, leaving a dark gap
+    float aa = 1.0 / u_cell;
+    float fill = 1.0 - smoothstep(size - aa, size + aa, r);
+    float rim = fill * smoothstep(size - 0.14, size - 0.02, r);   // a brighter edge
+    vec3 c = mix(u_dark, u_color, fill);
+    c = mix(c, min(vec3(1.0), u_color * 1.35 + 0.12), rim * 0.6);
+    float alpha = clamp(k * 1.6, 0.0, 1.0);
+    vec2 lp = (v_uv * u_size - u_labelRect.xy) / u_labelRect.zw;
+    if (u_labelOn > 0.5 && lp.x >= 0.0 && lp.y >= 0.0 && lp.x <= 1.0 && lp.y <= 1.0) {
+        vec4 l = texture2D(u_label, lp);
+        c = mix(c, l.rgb, l.a);
+        alpha = max(alpha, l.a);
+    }
+    gl_FragColor = vec4(c, alpha);
+}
+`;
+
+module.exports = { evahexwipe: EVAHEXWIPE, evarings: EVARINGS, evaseven: EVASEVEN, evahazard: EVAHAZARD, evahex: EVAHEX, evacorners: EVACORNERS, evasolo: EVASOLO, shiftbar: SHIFTBAR, arc: ARC, revbar: REVBAR, lights: LIGHTS, fill: FILL, box: BOX, grid: GRID, evaseg: EVASEG, evaframe: EVAFRAME };
