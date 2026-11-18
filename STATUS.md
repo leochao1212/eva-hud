@@ -1,22 +1,24 @@
-﻿# Project status
+# Project status
 
-Last updated: 2026-11-17 (Asia/Taipei)
+Last updated: 2026-11-18 (Asia/Taipei)
 
 ## Released (GitHub Releases, picked up by MGU Store source `leochao1212/eva-hud` -> Releases)
 
 | App | Version | Release | Car |
 |---|---|---|---|
-| shadow_dash (Shadow photo cluster) | 1.4.1 | [shadow-1.4.1](https://github.com/leochao1212/eva-hud/releases/tag/shadow-1.4.1) | Z4 G29, iDrive 7 |
+| shadow_dash (Shadow photo cluster) | 1.4.2 | [shadow-1.4.2](https://github.com/leochao1212/eva-hud/releases/tag/shadow-1.4.2) | Z4 G29, iDrive 7 |
 | eva_hud (EVA HUD) | 0.8.9 | same release | iDrive 7 |
 
 ## Shadow history
 
 - 1.4.0: EVA-style right panel in dark amber (#D9651A), no slanted accent. Installed on the Z4 via MGU Store: works, but BMW's stock gear box showed as a black square over the picture, and BMW's bottom info strip stayed visible.
-- 1.4.1: bottom strip covered black except BMW's gear-letter cell (x 1380-1460, y 660-720). Covering that letter is what makes the kombi draw its black gear box (bimmer-lab/apps issue 5, Cluster Themes, cruzen991/Cluster). No renderer flag or coding value removes the box. Right panel back to the 1.4.0 layout.
+- 1.4.1: bottom strip covered black except BMW's gear-letter cell (x 1380-1460, y 660-720). Covering that letter is what makes the kombi draw its black gear box (bimmer-lab/apps issue 5, Cluster Themes, cruzen991/Cluster). No renderer flag or coding value removes the box. Right panel back to the 1.4.0 layout. On the Z4 BMW's bottom strip still showed: the black fills started at y=660, leaving y 640-660 (between the photo and the fills) uncovered.
+- 1.4.2: black fills now cover y 640-720 (strip_l, strip_r, plus strip_c above the gear-letter cell). Only x 1380-1460, y 660-720 stays open.
 
 ## Open / to verify on the Z4
 
-- [ ] 1.4.1: the black gear box is gone. The gear-letter cell comes from other ID7 cars. If the box remains, measure the G29 letter from a photo of the stock cluster (theme off) and move the open cell.
+- [ ] 1.4.2: no BMW strip left between the photo and the bottom edge.
+- [ ] The black gear box is gone. The gear-letter cell comes from other ID7 cars. If the box remains, measure the G29 letter from a photo of the stock cluster (theme off) and move the open cell.
 - [ ] Bottom strip is black apart from the gear letter; the red seat-belt lamp stays (drawn by the kombi above all layers).
 - [ ] Drive-mode swap changes photo and colours; D/M show in the gear frame; EVA and Shadow coexist.
 

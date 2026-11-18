@@ -14,7 +14,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from shadow_geom import GEAR_LETTER, layout  # noqa: E402
+from shadow_geom import GEAR_LETTER, PANEL_H, PHOTO_H, layout  # noqa: E402
 
 OUT = os.path.join(HERE, '..', 'apps', 'shadow_dash', 'hud', 'layouts')
 MODES = [('sport', 'shadow_sport'), ('comfort', 'shadow_comfort'), ('eco', 'shadow_eco')]
@@ -41,18 +41,22 @@ def build(photo, theme):
         one['y'] = p['y'] - y0
         parts.append(one)
     gear = dict(spec['gear'])
-    # Cover the status row, but not the gear letter: covering that letter is what
-    # makes the kombi paint its black box on top of the theme.
+    # Cover the status row from the photo's bottom edge (y=640) to the panel's
+    # (y=720), but not the gear letter: covering that letter is what makes the
+    # kombi paint its black box on top of the theme. strip_c closes the gap above it.
     lx, ly, lw, lh = GEAR_LETTER
+    sy = PHOTO_H
     widgets = [
         {'id': 'bg', 'type': 'evaphoto', 'photo': photo, 'x': 0, 'y': 0, 'w': 1920, 'h': 640,
          'class': 'ambient', 'z': 0, 'keepInAlert': True},
         {'id': 'cv', 'type': 'evacanvas', 'x': x0, 'y': y0, 'w': x1 - x0, 'h': y1 - y0,
          'class': 'overlay', 'z': 10, 'parts': parts},
         gear,
-        {'id': 'strip_l', 'type': 'fill', 'x': 0, 'y': ly, 'w': lx, 'h': lh,
+        {'id': 'strip_l', 'type': 'fill', 'x': 0, 'y': sy, 'w': lx, 'h': PANEL_H - sy,
          'class': 'overlay', 'z': 30, 'color': 'black'},
-        {'id': 'strip_r', 'type': 'fill', 'x': lx + lw, 'y': ly, 'w': 1920 - (lx + lw), 'h': lh,
+        {'id': 'strip_c', 'type': 'fill', 'x': lx, 'y': sy, 'w': lw, 'h': ly - sy,
+         'class': 'overlay', 'z': 30, 'color': 'black'},
+        {'id': 'strip_r', 'type': 'fill', 'x': lx + lw, 'y': sy, 'w': 1920 - (lx + lw), 'h': PANEL_H - sy,
          'class': 'overlay', 'z': 30, 'color': 'black'},
     ]
     return {'schemaVersion': 2, 'name': 'Shadow ' + photo, 'theme': theme,

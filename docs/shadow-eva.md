@@ -19,8 +19,8 @@ gear frame beside range and time, and retains space for a three-digit speed.
 The gear shows the actual D/M/S drive letter and numeral, or P/R/N alone, including
 while stopped. It inherits neither shift-point red nor animated glyph scaling.
 
-The bottom status row is black except x 1380–1460, y 660–720. That cell is BMW's
-gear letter. Covering the letter is what makes the kombi paint a black box on
+The bottom status row (y 640–720, below the photo) is black except x 1380–1460,
+y 660–720. That cell is BMW's gear letter. Covering the letter is what makes the kombi paint a black box on
 top of the theme (Cluster Themes `minimal.json`, the same coordinates). The
 seat-belt lamp is drawn by the kombi above the panel and stays visible.
 

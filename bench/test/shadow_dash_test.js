@@ -91,15 +91,23 @@ function layoutTests() {
         const hits = (a, b) => a[0] < b[0] + b[2] && a[0] + a[2] > b[0] && a[1] < b[1] + b[3] && a[1] + a[3] > b[1];
         ['sport', 'comfort', 'eco'].forEach((mode) => {
             const layout = load('dash_shadow_' + mode);
-            const left = layout.widgets.find((w) => w.id === 'strip_l');
-            const right = layout.widgets.find((w) => w.id === 'strip_r');
-            assert.ok(left && right && left.type === 'fill' && right.type === 'fill', mode + ' strip covers');
-            assert.strictEqual(left.color, 'black');
-            assert.strictEqual(right.color, 'black');
-            assert.deepStrictEqual([left.x, left.y, left.w, left.h], [0, 660, 1380, 60]);
-            assert.deepStrictEqual([right.x, right.y, right.w, right.h], [1460, 660, 460, 60]);
+            const strips = layout.widgets.filter((w) => w.id.indexOf('strip_') === 0);
+            strips.forEach((s) => {
+                assert.strictEqual(s.type, 'fill', mode + ' ' + s.id + ' is a fill');
+                assert.strictEqual(s.color, 'black', mode + ' ' + s.id + ' is black');
+                assert.ok(!hits([s.x, s.y, s.w, s.h], GEAR_LETTER), mode + ' ' + s.id + ' covers the gear letter');
+            });
+            // every pixel from the photo's bottom edge (y=640) to the panel's (y=720) is either
+            // under the photo, under a black strip, or inside BMW's gear-letter cell
+            const covers = (x, y, r) => x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3];
+            for (let y = 640; y < 720; y += 1) {
+                for (let x = 0; x < 1920; x += 4) {
+                    const open = covers(x, y, GEAR_LETTER) || strips.some((s) => covers(x, y, [s.x, s.y, s.w, s.h]));
+                    assert.ok(open, mode + ' bottom strip uncovered at ' + x + ',' + y);
+                }
+            }
             const rects = [];
-            layout.widgets.forEach((w) => { if (w.id !== 'strip_l' && w.id !== 'strip_r') rects.push([w.x, w.y, w.w, w.h, w.id]); });
+            layout.widgets.forEach((w) => { if (w.id.indexOf('strip_') !== 0) rects.push([w.x, w.y, w.w, w.h, w.id]); });
             const canvas = layout.widgets.find((w) => w.type === 'evacanvas');
             canvas.parts.forEach((p) => rects.push([canvas.x + p.x, canvas.y + p.y, p.w, p.h, p.id]));
             rects.forEach((r) => assert.ok(!hits(r, GEAR_LETTER), mode + ' ' + r[4] + ' covers the gear letter'));
@@ -116,7 +124,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.4.1');
+        assert.strictEqual(shadow.version, '1.4.2');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);
@@ -196,7 +204,7 @@ function runtimeTests() {
             assert.strictEqual(dash.target, 'panel');
             assert.strictEqual(dash.activeName, 'shadow_comfort');
             assert.deepStrictEqual(client.targets(), ['panel']);
-            assert.strictEqual(client.layers.size, 5);
+            assert.strictEqual(client.layers.size, 6);  // photo, canvas, gear, three black strips
             const photo = Array.from(client.layers.values()).find((l) => l.iw === 1920 && l.ih === 640);
             assert.ok(photo, 'no full-cluster photo');
             const sent = client.sent.find((s) => s.ref && client.layers.get(s.ref) === photo);
