@@ -7,7 +7,7 @@ Last updated: 2026-11-18 (Asia/Taipei)
 | App | Version | Release | Car |
 |---|---|---|---|
 | shadow_dash (Shadow photo cluster) | 1.4.7 | [shadow-1.4.7](https://github.com/leochao1212/eva-hud/releases/tag/shadow-1.4.7) | Z4 G29, iDrive 7 |
-| eva_hud (EVA HUD) | 0.8.10 | [eva-0.8.10](https://github.com/leochao1212/eva-hud/releases/tag/eva-0.8.10) | iDrive 7 |
+| eva_hud (EVA HUD) | 0.8.11 | [eva-0.8.11](https://github.com/leochao1212/eva-hud/releases/tag/eva-0.8.11) | iDrive 7 |
 
 ## Shadow history
 
@@ -23,12 +23,13 @@ Last updated: 2026-11-18 (Asia/Taipei)
 ## EVA history (iDrive 7)
 
 - 0.8.10: a drive-mode change between two whole-cluster designs (Original, D, C3, E3) on the panel: orange hexagons sweep in from the left (shaders.EVAHEXWIPE, an effect layer driven by u_t), the old design goes and the new one is built under them while the mode shows in the middle (DRIVE MODE >> SPORT / 第一種戦闘配置, an rgba8 asset the shader samples, fonts tr_en / tr_jp / tr_sub), then the hexagons sweep out. 420 ms in, at least 260 ms covered (until the new design is drawn, at most 1.5 s), 420 ms out. One layer more than the design (C3 and E3 have seven), about 0.8 MB. Not for centre designs (map target), during an alert or a BMW pop-up, or with "Mode change animation" off. Also: the pixel-memory retry (hud.js) and the etc2 client from Shadow 1.4.6.
+- 0.8.11: the hexagons are a black honeycomb with thin orange rims; only the sweep's front glows orange (the owner: too much orange). The whole-cluster designs' bottom cover (botcover) and the hexagons leave BMW's gear letter open (x 1380-1460, y 660-720, as Shadow 1.4.1+), so the kombi draws no black gear box. hud.js: a fill's "hole" without "holeWhen" is always cut.
 
 ## Open / to verify on the Z4
 
 - [ ] 1.4.6 on the Z4: the photo shows the right way up and looks like 1.4.5's; Sport / Comfort / Eco swaps fade with no stock gauges; log has "photos sent as etc2rgba assets" and no "etc2 photo refused".
 - [ ] 1.4.7: no BMW status row during a drive-mode swap.
-- [ ] EVA 0.8.10: Comfort C3 / Sport Original / Eco E3 swaps show the hexagon sweep and the mode label, no stock gauges, no stuck layer.
+- [ ] EVA 0.8.11: Comfort C3 / Sport Original / Eco E3 swaps show the black honeycomb sweep and the mode label, no stock gauges, no stuck layer; no black gear box over EVA.
 - [ ] Shadow off, then EVA on a whole-cluster design: EVA complete (no stuck layer); if the log shows "pixel memory full: building again", it recovers within ~5 s.
 - [ ] Eco Pro (1.4.3): smaller picture on the left, wide column readable, coolant shows.
 - [ ] 1.4.2: no BMW strip left between the photo and the bottom edge.

@@ -30,7 +30,8 @@ const textRaster = require('./hud_text');
 
 const POPUP_SLOT = 0x202;
 /*
- * A drive-mode change between two whole-cluster designs: orange hexagons sweep in over the old design (an
+ * A drive-mode change between two whole-cluster designs: a black honeycomb with orange rims, lit orange only at
+ * its front, sweeps in over the old design (an
  * effect layer, no pixels), the old design goes and the new one is built under them while a label names the
  * mode, then the hexagons sweep out. The two designs never exist together: each is 7-11 MB of the service's
  * 16 MB. The label is an asset the hexagons' shader draws, so the change adds one layer (C3 and E3 have seven,
@@ -40,6 +41,7 @@ const TRANSITION = { inMs: 420, holdMinMs: 260, holdMaxMs: 1500, outMs: 420, cel
 const TRANSITION_WORDS = { sport: ['SPORT', '第一種戦闘配置'], comfort: ['COMFORT', '通常態勢'], eco: ['ECO PRO', '活動限界'] };
 const TRANSITION_LABEL = { w: 720, h: 132 };
 const EVA_ORANGE = [255, 136, 0];
+const GEAR_LETTER = [1380, 660, 80, 60];   // BMW's gear letter: left open, as the designs' bottom cover leaves it
 const CENTRE_DESIGNS = ['a', 'b', 'c1', 'c2', 'e1', 'e2', 'sq', 'sqs', 'sqc', 'sqe'];   // sq*: the ID8 map-target squares (dash_sq*), sqs/sqc/sqe = ID7 HUD's Sport/Comfort/Eco
 const WHOLE_DESIGNS = ['d', 'c3', 'e3'];     // besides the original, 'eva'
 const TEXT_MS = 250;     // its text rectangles are about four times the HUD's, and share one upload budget with it
@@ -174,9 +176,12 @@ class EvaDash extends EvaHud {
         this.client.uniform(ref, 'u_size', [r.w, r.h]);
         this.client.uniform(ref, 'u_cell', [TRANSITION.cell]);
         this.client.uniform(ref, 'u_color', EVA_ORANGE.map((v) => v / 255));
-        this.client.uniform(ref, 'u_dark', [0.06, 0.025, 0.0]);
+        this.client.uniform(ref, 'u_dark', [0.02, 0.01, 0.0]);
         this.client.uniform(ref, 'u_t', [0]);
         this.client.uniform(ref, 'u_labelOn', [0]);
+        const g = GEAR_LETTER, hx = g[0] - r.x, hy = g[1] - r.y;
+        const meets = hx < r.w && hy < r.h && hx + g[2] > 0 && hy + g[3] > 0;
+        this.client.uniform(ref, 'u_hole', meets ? [hx, hy, g[2], g[3]] : [0, 0, 0, 0]);
         this.transition = { phase: 'in', from: now, cover: ref, label: null, rect: r };
         this._transitionLabel(this.transition);
         this.log.info('drive-mode change: hexagons over ' + this.activeName + ' -> ' + this._layoutName());

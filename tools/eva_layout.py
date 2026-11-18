@@ -65,6 +65,7 @@ SEVEN_W, SEVEN_H = 510, 180
 # what MAGI says on design A: shared/eva_magi.js has the same strings
 MAGI_WORDS = ('全会一致', '審議中', '否決')
 MAGI_SUBS = ('UNANIMOUS // 出撃承認', 'DELIBERATING // 暖機中', 'DELIBERATING // 待機中', 'REJECTED // 油温上昇', 'REJECTED // 水温上昇', 'REJECTED // 回転数超過')
+GEAR_LETTER = (1380, 660, 80, 60)       # BMW's gear letter in the bottom row, left open (Shadow: tools/shadow_geom.py)
 DASH_BG = {'id': 'bg', 'type': 'fill', 'x': 0, 'y': 0, 'w': 1920, 'h': 640, 'class': 'ambient', 'z': 0, 'color': 'black', 'keepInAlert': True}
 
 UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -1636,9 +1637,12 @@ def main(x, y, w, h):
     if skipped:
         print('SKIPPED (did not fit this font): ' + '; '.join(skipped))
     # Cover test: high-z opaque strip over the bottom band (where BMW's status line sits) on the whole-cluster layouts.
+    # It leaves BMW's gear letter open (GEAR_LETTER, as Shadow does): covering that letter makes the kombi
+    # paint a black box over the theme.
     for doc in (dash, dash_d, dash_c3, dash_e3):
         if doc is not None:
-            doc['widgets'].append({'id': 'botcover', 'type': 'fill', 'x': 0, 'y': 636, 'w': 1920, 'h': 84, 'color': 'black', 'class': 'overlay', 'z': 20, 'keepInAlert': True})
+            doc['widgets'].append({'id': 'botcover', 'type': 'fill', 'x': 0, 'y': 636, 'w': 1920, 'h': 84, 'color': 'black', 'class': 'overlay', 'z': 20, 'keepInAlert': True,
+                                   'hole': list(GEAR_LETTER)})
     for f in os.listdir(fonts_dir):
         shutil.move(os.path.join(fonts_dir, f), os.path.join(APP, 'fonts', f))
     shutil.rmtree(fonts_dir)

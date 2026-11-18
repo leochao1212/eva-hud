@@ -1833,6 +1833,7 @@ const tests = {
         const [, hex] = cover();
         assert.ok(hex.uniforms.u_t[0] > 0 && hex.uniforms.u_t[0] < 1, 'sweeping in: ' + hex.uniforms.u_t);
         assert.deepStrictEqual([hex.x, hex.y], [0, 0]);
+        assert.deepStrictEqual(hex.uniforms.u_hole, [1380, 660, 80, 60], "the hexagons leave BMW's gear letter open");
         assert.ok(hex.w > 1800 && hex.h >= 600, 'covers the designs: ' + hex.w + 'x' + hex.h);
         await wait(450);
         assert.strictEqual(d.activeName, 'eva', 'swapped under the hexagons');
@@ -1854,6 +1855,22 @@ const tests = {
         assert.strictEqual(c.layers.size, d.widgets.size, 'only the new design is left');
         assert.ok(most <= 8, most + ' layers at once');
         assert.deepStrictEqual(c.refused, [], 'nothing refused (layers, memory)');
+    },
+    async "whole-cluster designs leave BMW's gear letter open, so the kombi draws no black box"() {
+        const G = [1380, 660, 80, 60];
+        const hits = (w) => w.x < G[0] + G[2] && w.x + w.w > G[0] && w.y < G[1] + G[3] && w.y + w.h > G[1];
+        for (const name of ['dash_eva', 'dash_c3', 'dash_e3', 'dash_d']) {
+            const doc = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/eva_hud/hud/layouts', name + '.json'), 'utf8'));
+            const over = doc.widgets.filter(hits);
+            assert.deepStrictEqual(over.map((w) => w.id), ['botcover'], name + ': ' + over.map((w) => w.id));
+            assert.deepStrictEqual(over[0].hole, G, name + ": the cover's hole is the gear letter");
+            assert.ok(!over[0].holeWhen, name + ': always open');
+        }
+        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3' });
+        await wait(SETTLE_MS);
+        const cover = Array.from(a.dash().layers.values()).find((l) => l.kind === 'effect' && l.y === 636 && l.h === 84);
+        assert.ok(cover, 'the bottom cover');
+        assert.deepStrictEqual(cover.uniforms.u_hole, [1380, 24, 80, 60], 'cut on the car: ' + cover.uniforms.u_hole);
     },
     async 'the label names the mode, in Barlow and in Matisse'() {
         const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3', dashSport: 'whole', dashEco: 'e3' });

@@ -421,7 +421,13 @@
    "color": "black",
    "class": "overlay",
    "z": 20,
-   "keepInAlert": true
+   "keepInAlert": true,
+   "hole": [
+    1380,
+    660,
+    80,
+    60
+   ]
   }
  ]
 }

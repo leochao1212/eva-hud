@@ -31,8 +31,8 @@
  *   lights    effect layer; shaders.js lights, shift lights over the last 2000 rpm before the shift point
  *   badge     image layer; a rounded tag with text: "tone" verdict (the last shift's grade colour) or cold
  *   fill      effect layer; a solid colour (role "color", default "bg") over the whole widget, with an
- *             optional see-through "hole": [x, y, w, h] in target px, cut only while the bool setting
- *             "holeWhen" is on (the cluster's map window). Opaque fill hides BMW's gauges under it.
+ *             optional see-through "hole": [x, y, w, h] in target px, always, or with "holeWhen" only while
+ *             that bool setting is on (the cluster's map window). Opaque fill hides BMW's gauges under it.
  *   box       effect layer; a framed box: "fill" and "line" roles, "border" px, "radius" px, and a
  *             header strip "head" px tall in role "headColor" (its label is a text widget on top)
  *   grid      calibration: effect layer of lines every "step" px (brighter every "major" steps)
@@ -614,7 +614,7 @@ class HudApp {
             this.client.uniform(ref, 'u_blue', rgb(LIGHTS.blue));
             this.client.uniform(ref, 'u_off', [w.off === undefined ? 0.14 : w.off]);
         } else if (w.type === 'fill') {
-            const h = w.hole && w.holeWhen && this.setting(w.holeWhen) === true ? w.hole : null;
+            const h = w.hole && (!w.holeWhen || this.setting(w.holeWhen) === true) ? w.hole : null;
             this.client.uniform(ref, 'u_size', [w.w, w.h]);
             this.client.uniform(ref, 'u_color', rgba(color(t, w.color || 'bg')));
             this.client.uniform(ref, 'u_hole', h ? [h[0] - w.x, h[1] - w.y, h[2], h[3]] : [0, 0, 0, 0]);

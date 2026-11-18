@@ -567,12 +567,14 @@ void main() {
 }
 `;
 
-const EVAHEXWIPE = `// The dash's drive-mode change: orange hexagons sweep in from the left until they cover the
-// layer, then sweep out to the left again. No pixels: one uniform, u_t, moves it.
+const EVAHEXWIPE = `// The dash's drive-mode change: a black honeycomb with thin orange rims sweeps in from the left
+// until it covers the layer, then sweeps out again. Only the sweep's front is lit orange: a cell glows
+// while it grows, then settles black. No pixels: one uniform, u_t, moves it.
 //   u_t     0..1 the sweep in (0: nothing, 1: covered), 1..2 the sweep out (2: nothing again)
 //   u_size  layer px, u_cell a hexagon's side px, u_color the hexagons' rgb, u_dark the gaps' rgb
 //   u_label an rgba8 asset drawn over the hexagons at u_labelRect (x, y, w, h px) while u_labelOn is 1:
 //           the mode's name, in this layer so the change costs one layer, not two
+//   u_hole  x, y, w, h px left see-through: BMW's gear letter (covering it makes the kombi draw a black box)
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
 #else
@@ -587,8 +589,14 @@ uniform vec3 u_dark;
 uniform sampler2D u_label;
 uniform vec4 u_labelRect;
 uniform float u_labelOn;
+uniform vec4 u_hole;
 
 void main() {
+    vec2 px = v_uv * u_size;
+    if (u_hole.z > 0.0 && px.x >= u_hole.x && px.y >= u_hole.y && px.x < u_hole.x + u_hole.z && px.y < u_hole.y + u_hole.w) {
+        gl_FragColor = vec4(0.0);
+        return;
+    }
     vec2 p = v_uv * u_size / u_cell;
     vec2 s = vec2(1.7320508, 3.0);
     vec2 a = mod(p, s) - s * 0.5;
@@ -601,12 +609,14 @@ void main() {
         : 1.0 - smoothstep(0.0, 1.0, ((u_t - 1.0) * (1.0 + SPREAD) - x) / SPREAD);
     vec2 q = abs(g);
     float r = max(q.x, q.x * 0.5 + q.y * 0.8660254);   // 0 at the centre, 0.866 at the cell's edge
-    float size = 0.8660254 * 0.86 * k;                  // the hexagon grows with k, leaving a dark gap
+    float size = 0.8660254 * 0.90 * k;                  // the hexagon grows with k, leaving a black gap
     float aa = 1.0 / u_cell;
     float fill = 1.0 - smoothstep(size - aa, size + aa, r);
-    float rim = fill * smoothstep(size - 0.14, size - 0.02, r);   // a brighter edge
-    vec3 c = mix(u_dark, u_color, fill);
-    c = mix(c, min(vec3(1.0), u_color * 1.35 + 0.12), rim * 0.6);
+    float rim = fill * smoothstep(size - 0.075 - aa, size - 0.075 + aa, r);   // the thin orange line
+    float glow = 4.0 * k * (1.0 - k);                   // lit only while the cell grows (or shrinks)
+    vec3 inner = mix(u_dark, u_color, glow * 0.85);
+    vec3 c = mix(vec3(0.0), inner, fill);
+    c = mix(c, u_color, rim * 0.9);
     float alpha = clamp(k * 1.6, 0.0, 1.0);
     vec2 lp = (v_uv * u_size - u_labelRect.xy) / u_labelRect.zw;
     if (u_labelOn > 0.5 && lp.x >= 0.0 && lp.y >= 0.0 && lp.x <= 1.0 && lp.y <= 1.0) {
