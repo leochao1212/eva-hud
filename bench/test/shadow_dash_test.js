@@ -126,7 +126,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.4.6');
+        assert.strictEqual(shadow.version, '1.4.7');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);
@@ -264,6 +264,12 @@ function runtimeTests() {
                 const [[oldRef, old]] = client.photos();
                 assert.strictEqual(old.binds.u_photo, assetOf.comfort);
                 const sentBefore = client.sent.length;
+                const strips = () => Array.from(client.layers.entries()).filter(([, l]) => l.kind === 'effect' && l.uniforms.u_hole).map(([r]) => r).sort();
+                const stripRefs = strips();
+                assert.strictEqual(stripRefs.length, 3, 'three black strips');
+                const dropped = [];
+                const drop = client.drop.bind(client);
+                client.drop = (ref) => { dropped.push(ref); drop(ref); };
                 const alphas = [];
                 const uniform = client.uniform.bind(client);
                 client.uniform = (ref, name, v) => { if (name === 'u_alpha') alphas.push([ref, v[0]]); uniform(ref, name, v); };
@@ -282,6 +288,9 @@ function runtimeTests() {
                 assert.ok(fade.every((v, i) => !i || v >= fade[i - 1]), 'monotonic: ' + fade);
                 const photoUploads = client.sent.slice(sentBefore).filter((s) => s.px && s.px.length >= ETC2_BYTES);
                 assert.strictEqual(photoUploads.length, 0, 'no photo pixels sent on a swap');
+                // the black strips over BMW's status row are never dropped on a swap: not even for a frame
+                assert.deepStrictEqual(strips(), stripRefs, 'the same three strip layers');
+                assert.ok(!dropped.some((r) => stripRefs.indexOf(r) >= 0), 'a strip was dropped during the swap');
                 // two swaps faster than the fade: never more than two photo layers
                 a.drive('ECO PRO');
                 await wait(60);
@@ -292,6 +301,7 @@ function runtimeTests() {
                 assert.strictEqual(client.photos().length, 1);
                 assert.strictEqual(client.photos()[0][1].binds.u_photo, assetOf.comfort);
                 assert.ok(client.peakBytes <= 8e6, 'peak ' + (client.peakBytes / 1e6).toFixed(1) + ' MB');
+                assert.deepStrictEqual(strips(), stripRefs, 'strips still the same after three swaps');
                 // off: no layer and no asset left, so EVA gets the panel and the memory
                 a.hu.settings.set('enabled', false);
                 await wait(200);

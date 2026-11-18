@@ -89,11 +89,44 @@ class ShadowDash extends EvaHud {
 
     _rebuildInner() {
         if (this._layoutName() === 'off') this._dropPhotos();   // free the memory and the panel for EVA
+        this.stripsSeen = {};
         EvaHud.prototype._rebuildInner.call(this);
+        // strips the new layout no longer has (or 'off'): only now are they dropped
+        Object.keys(this.strips || {}).forEach((id) => { if (!this.stripsSeen[id]) this._dropStrip(id); });
     }
 
     _create(w) {
+        if (w.type === 'fill' && /^strip_/.test(w.id)) { this._keepStrip(w); return; }
         if (w.type !== 'evaphoto' || this.etc2Broken || !this._showPhoto(w)) EvaHud.prototype._create.call(this, w);
+    }
+
+    /* ---------------- the black bottom strips stay put across a drive-mode swap ---------------- */
+
+    /**
+     * The black fills over BMW's bottom status row are the same in every mode. A rebuild used to
+     * drop them and make them again, and BMW's row could show through for a frame. Kept here, out
+     * of this.widgets, they stay as they are unless their rect or colour changes.
+     */
+    _keepStrip(w) {
+        const key = [w.x, w.y, w.w, w.h, w.color].join(',');
+        this.strips = this.strips || {};
+        if (this.stripsSeen) this.stripsSeen[w.id] = true;
+        const kept = this.strips[w.id];
+        if (kept && kept.key === key) return;
+        if (kept) this._dropStrip(w.id);
+        EvaHud.prototype._create.call(this, w);
+        const x = this.widgets.get(w.id);
+        if (!x) return;
+        this.widgets.delete(w.id);
+        this.strips[w.id] = { ref: x.ref, key };
+        if (this.givingWay) this.client.set(x.ref, { visible: 0 });
+    }
+
+    _dropStrip(id) {
+        const s = this.strips && this.strips[id];
+        if (!s) return;
+        this.client.drop(s.ref);
+        delete this.strips[id];
     }
 
     /** The three photos as assets, sent once. False when this build has no etc2 copies. */
@@ -170,6 +203,7 @@ class ShadowDash extends EvaHud {
     _showForPopup(hide, now) {
         if (this.photo) this.client.set(this.photo.ref, { visible: hide ? 0 : 1 });
         if (this.photoFade) this.client.set(this.photoFade.under, { visible: hide ? 0 : 1 });
+        Object.keys(this.strips || {}).forEach((id) => this.client.set(this.strips[id].ref, { visible: hide ? 0 : 1 }));
         EvaHud.prototype._showForPopup.call(this, hide, now);
     }
 
@@ -180,6 +214,7 @@ class ShadowDash extends EvaHud {
 
     stop() {
         this._dropPhotos();
+        Object.keys(this.strips || {}).forEach((id) => this._dropStrip(id));
         EvaHud.prototype.stop.call(this);
     }
 
