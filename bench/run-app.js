@@ -35,8 +35,34 @@ process.on('uncaughtException', (e) => { log.error('uncaught (the car would exit
 
 try { fs.mkdirSync(dataDir); } catch (e) { /* there */ }
 const { headUnit } = require(path.join(__dirname, '..', 'kit', 'tools', 'hu-stub.js'));
-const hu = headUnit(stage, { live: true, dataDir, log, image: () => Promise.resolve() });
+// the center screen's own page (a canvas screen, e.g. EVA's eva_page.js): the kit plays each frame into a picture, as
+// for the HMI without the GPU renderer; the page shows it (at most 5 a second) and sends taps back
+let centrePng = null, centreSent = 0, centreTimer = null;
+const sendCentre = () => {
+    centreTimer = null;
+    if (!centrePng) return;
+    centreSent = Date.now();
+    try { send({ t: 'centre', png: (Buffer.isBuffer(centrePng) ? centrePng : centrePng.png()).toString('base64') }); } catch (e) { log.warn('bench: centre frame: ' + e); }
+};
+const hu = headUnit(stage, { live: true, dataDir, log, image: (name, cv) => {
+    centrePng = cv;
+    if (!centreTimer) centreTimer = setTimeout(sendCentre, Math.max(0, centreSent + 200 - Date.now()));
+    return Promise.resolve();
+} });
 const { spec, settings, ui } = hu;
+// the page's last frame as recorded (its tap targets, the header's tab rects)
+let centreRec = null;
+const present = hu.display.present.bind(hu.display);
+hu.display.present = (name, cv, soft) => { centreRec = cv; return present(name, cv, soft); };
+/** A tap on the center screen picture, in its px: a header tab, else the first target under it (as the kit's display). */
+function centreTap(x, y) {
+    const r = centreRec;
+    if (!r) return;
+    const tab = (r.tabRects || []).findIndex((t) => x >= t.x && x < t.x + t.w && y >= t.y && y < t.y + t.h);
+    if (tab >= 0 && hu.display.onTab) { hu.display.onTab(tab); return; }
+    const t = (r.targets || []).find((q) => x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h);
+    if (t) { log.info('bench: centre tap ' + t.key); try { t.run(); } catch (e) { log.error('bench: tap ' + t.key, e); } }
+}
 
 // the app's HudApp instance, for the values the page shows (hud.js is loaded by the app's main.js)
 let hud = null;
@@ -120,6 +146,7 @@ process.on('message', (m) => {
         if (settings.get('demo') !== want) press('demo', want);
     } else if (m.t === 'set') press(m.key, m.value);
     else if (m.t === 'drive') drive = m.value;
+    else if (m.t === 'tap') centreTap(m.x, m.y);
 });
 process.on('disconnect', () => process.exit(0));
 process.on('SIGTERM', () => process.exit(0));

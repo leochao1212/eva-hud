@@ -64,6 +64,10 @@
       <span id="fps"></span>
     </div>
     <canvas id="hud" width="800" height="480"></canvas>
+    <div id="centreBox" style="display:none;margin-top:14px">
+      <div class="bar"><b>中控螢幕 Center screen</b> <span class="note" style="margin:0">點畫面可以操作（分頁、設定列、選項）</span></div>
+      <img id="centre" style="width:100%;border-radius:8px;cursor:pointer;background:#000" alt="center screen">
+    </div>
     <div class="note" id="stageNote">Pixels are the app's own: image layers are its raw RGBA pushes, gauges run its real GLSL shader in WebGL. Brightness, color and blur on the real display will differ; only the car shows that.</div>
   </div>
   <aside>
@@ -265,6 +269,11 @@
   }
 
   let lastValues = {};
+  document.getElementById('centre').addEventListener('click', (e) => {
+    const img = e.currentTarget, r = img.getBoundingClientRect();
+    const x = (e.clientX - r.left) * img.naturalWidth / r.width, y = (e.clientY - r.top) * img.naturalHeight / r.height;
+    fetch('/tap', { method: 'POST', body: JSON.stringify({ x, y }) });
+  });
   const es = new EventSource('/events');
   es.onopen = () => { const c = document.getElementById('conn'); c.textContent = 'page: live'; c.className = 'pill ok'; };
   es.onerror = () => { const c = document.getElementById('conn'); c.textContent = 'page: bench server gone'; c.className = 'pill bad'; };
@@ -290,6 +299,9 @@
       dirty = true;
     } else if (m.t === 'settings') {
       renderSettings(m);
+    } else if (m.t === 'centre') {
+      document.getElementById('centreBox').style.display = '';
+      document.getElementById('centre').src = 'data:image/png;base64,' + m.png;
     } else if (m.t === 'status') {
       document.getElementById('status').textContent = m.s;
     } else if (m.t === 'app') {

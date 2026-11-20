@@ -314,7 +314,8 @@ function startApp() {
     c.on('message', (m) => {
         if (m && m.t === 'settings') lastSettings = m;
         if (m && m.t === 'status') { lastStatus = m; log('info', 'center screen status: ' + m.s); }
-        if (m && (m.t === 'values' || m.t === 'settings' || m.t === 'status')) send(m);
+        if (m && m.t === 'centre') lastCentre = m;
+        if (m && (m.t === 'values' || m.t === 'settings' || m.t === 'status' || m.t === 'centre')) send(m);
     });
     c.on('exit', (code, sig) => {
         if (c !== child) return;
@@ -346,6 +347,7 @@ function restartApp(why) {
 }));
 let lastSettings = null;
 let lastStatus = null;
+let lastCentre = null;      // the center screen page's last picture (a canvas screen app)
 
 /* ---------- HTTP ---------- */
 
@@ -375,6 +377,7 @@ const web = http.createServer(async (req, res) => {
         layers.forEach((l) => sendPixels(l, res));
         if (lastSettings) send(lastSettings, res);
         if (lastStatus) send(lastStatus, res);
+        if (lastCentre) send(lastCentre, res);
         send({ t: 'app', state: child ? 'running' : 'stopped' }, res);
         return;
     }
@@ -389,6 +392,12 @@ const web = http.createServer(async (req, res) => {
         drive = { t: 'drive', value: b.value === null || b.value === undefined ? null : b.value };
         if (child) child.send(drive);
         log('info', 'bench: drive mode ' + JSON.stringify(drive.value));
+        res.writeHead(204); return res.end();
+    }
+    if (req.method === 'POST' && url === '/tap') {
+        // a click on the center screen picture, in its px: run-app.js finds the target under it
+        const b = await body(req);
+        if (child) child.send({ t: 'tap', x: Number(b.x) || 0, y: Number(b.y) || 0 });
         res.writeHead(204); return res.end();
     }
     if (req.method === 'POST' && url === '/restart') {

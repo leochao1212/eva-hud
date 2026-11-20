@@ -2008,34 +2008,56 @@ const tests = {
             assert.strictEqual(Array.from(c.layers.keys()).join(','), refs, v);
         }
     },
-    async 'the centre page: the cockpit, then the settings tab, whose rows open their choices and set them'() {
+    async 'the centre page: the cockpit, then the cluster, HUD, alerts and system tabs, each choice set by a tap'() {
         const a = startApp({ screens: 'dash', demo: 'on' });
-        let rec = null, png = null;
+        let rec = null;
         const present = a.hu.display.present.bind(a.hu.display);
         a.hu.display.present = (name, cv, soft) => { rec = cv; return present(name, cv, soft); };
         await wait(SETTLE_MS + 400);
         const keys = () => ((rec && rec.targets) || []).map((t) => t.key);
         const tap = (k) => { const t = rec.targets.find((x) => x.key === k); assert.ok(t, 'no target ' + k + ': ' + keys().join(' ')); t.run(); };
+        const tab = async (i) => { a.hu.display.onTab(i); await wait(300); };
         assert.ok(rec, 'the page drew');
         assert.strictEqual(a.hu.spec.screens[0].kind, 'canvas');
-        assert.ok(!keys().some((k) => /^row:/.test(k)), 'the cockpit first');
-        a.hu.display.onTab(1);
-        await wait(300);
-        assert.ok(keys().indexOf('row:dashTransitionStyle') >= 0 && keys().indexOf('row:dashComfort') >= 0 && keys().indexOf('toggle:alertsOn') >= 0, keys().join(' '));
-        assert.ok(keys().indexOf('row:hudComfort') < 0, 'only the rows the Mode uses');
+        assert.ok(!keys().some((k) => /^(row|mode|switch):/.test(k)), 'the cockpit first');
+        // the cluster: its switch, one card per drive mode, the animation
+        await tab(1);
+        ['switch:dash', 'mode:Dash:Comfort', 'mode:Dash:Sport', 'mode:Dash:Eco', 'row:dashTransitionStyle'].forEach((k) => assert.ok(keys().indexOf(k) >= 0, k + ': ' + keys().join(' ')));
+        tap('mode:Dash:Sport');
+        await wait(250);
+        assert.ok(!keys().some((k) => /ID8|:sq/.test(k)), 'no iDrive 8 designs on iDrive 7');
+        tap('pick:dashSport:c3');
+        await wait(250);
+        assert.strictEqual(a.hu.settings.get('dashSport'), 'c3');
+        assert.strictEqual(a.hu.settings.get('bothDashSport'), 'c3', 'the HUD + Dash key too');
         tap('row:dashTransitionStyle');
         await wait(250);
         tap('pick:dashTransitionStyle:title');
         await wait(250);
         assert.strictEqual(a.hu.settings.get('dashTransitionStyle'), 'title');
         assert.ok(!keys().some((k) => /^pick:/.test(k)), 'the list closes');
+        // the HUD's switch with the cluster on: HUD + Dash; off again: Dash only
+        await tab(2);
+        tap('switch:hud');
+        await wait(250);
+        assert.strictEqual(a.hu.settings.get('screens'), 'both');
+        tap('switch:hud');
+        await wait(250);
+        assert.strictEqual(a.hu.settings.get('screens'), 'dash');
+        // the alerts and the system
+        await tab(3);
         const was = a.hu.settings.get('alertsOn');
         tap('toggle:alertsOn');
         await wait(150);
         assert.strictEqual(a.hu.settings.get('alertsOn'), !was);
-        a.hu.display.onTab(0);
+        assert.ok(keys().indexOf('row:limitHeat') >= 0);
+        await tab(4);
+        ['row:motto', 'row:redline', 'toggle:coldGuard', 'row:demo', 'all-settings'].forEach((k) => assert.ok(keys().indexOf(k) >= 0, k));
+        tap('row:redline');
         await wait(250);
-        assert.ok(!keys().some((k) => /^row:/.test(k)), 'back on the cockpit');
+        tap('pick:redline:6500');
+        await wait(250);
+        assert.strictEqual(a.hu.settings.get('redline'), 6500);
         assert.deepStrictEqual(a.lines.filter((l) => /^ERROR/.test(l)).map((l) => l.slice(0, 160)), []);
     },
     async 'a dash that cannot start leaves the HUD running and says so'() {
@@ -2051,9 +2073,11 @@ const tests = {
 (async () => {
     execSync('python3 kit/tools/build.py eva_hud', { cwd: ROOT, stdio: 'ignore' });
     let failed = 0;
-    for (const name of Object.keys(tests)) {
+    // EVA_TEST=<part of a name> runs only the tests whose name has it
+    const names = Object.keys(tests).filter((n) => !process.env.EVA_TEST || n.indexOf(process.env.EVA_TEST) >= 0);
+    for (const name of names) {
         try { await tests[name](); console.log('ok    ' + name); } catch (e) { failed++; console.log('FAIL  ' + name + '\n      ' + e.message.split('\n')[0]); }
     }
-    console.log('\n' + (Object.keys(tests).length - failed) + ' of ' + Object.keys(tests).length + ' passed');
+    console.log('\n' + (names.length - failed) + ' of ' + names.length + ' passed');
     process.exit(failed ? 1 : 0);
 })();
