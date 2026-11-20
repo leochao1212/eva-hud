@@ -63,7 +63,7 @@ const ALERTS = {
     afr: { en: 'AFR ANOMALY', jp: '空燃比異常', rgb: [118, 255, 3], label: '空燃比  AFR', status: 'AFR DEVIATION // 混合気異常', preview: 18.8 },
     multi: { en: 'MULTIPLE ALERTS', jp: '多重警報発令', rgb: [255, 0, 51], label: '同時発生', status: '', preview: 3 },
 };
-const LIVE_SETTINGS = ['dashTransition', 'demo', 'gmtOffset', 'motto', 'dashCenter', 'alertsOn', 'dismissAlert', 'alertPreview', 'limitKnock', 'limitFuel', 'limitAfrLow', 'limitAfrHigh', 'limitHeat', 'limitBoost'];
+const LIVE_SETTINGS = ['dashTransitionStyle', 'demo', 'gmtOffset', 'motto', 'dashCenter', 'alertsOn', 'dismissAlert', 'alertPreview', 'limitKnock', 'limitFuel', 'limitAfrLow', 'limitAfrHigh', 'limitHeat', 'limitBoost'];
 const POPUP_SLOT_HUD = 0x322;
 // the settings that choose what shows: a change redraws only if it changes that
 const LAYOUT_SETTINGS = /^(screens|(hud|dash|bothHud|bothDash)(Comfort|Sport|Eco))$/;

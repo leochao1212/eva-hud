@@ -126,7 +126,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.4.7');
+        assert.strictEqual(shadow.version, '1.5.0');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);
@@ -255,7 +255,7 @@ function runtimeTests() {
             dash.stop();
         },
         async 'a drive-mode swap fades the new photo in over the old one, with nothing uploaded'() {
-            const a = startApp({});
+            const a = startApp({ photoTransition: 'fade' });
             await wait(SETTLE_MS);
             const dash = a.dash(), client = a.client();
             try {
@@ -310,6 +310,49 @@ function runtimeTests() {
                 await wait(200);
                 assert.strictEqual(client.photos().length, 1, 'back on: the photo again');
                 assert.strictEqual(Array.from(client.layers.values()).filter((l) => l.kind === 'asset').length, 3);
+            } finally { dash.stop(); }
+        },
+        async 'each photo change animation runs to the end, swaps without a rebuild, and Random varies'() {
+            const a = startApp({});
+            await wait(SETTLE_MS);
+            const dash = a.dash(), client = a.client();
+            try {
+                const styleOf = { wave: 1, stripes: 2, sheen: 3 };
+                const seen = [];
+                const uniform = client.uniform.bind(client);
+                const ts = [];
+                client.uniform = (ref, name, v) => { if (name === 'u_style') seen.push(v[0]); if (name === 'u_t') ts.push(v[0]); uniform(ref, name, v); };
+                const modes = ['SPORT', 'ECO PRO', 'COMFORT'];
+                let n = 0;
+                for (const style of ['wave', 'stripes', 'sheen', 'off']) {
+                    const built = dash.widgets.size;
+                    a.hu.settings.set('photoTransition', style);
+                    seen.length = 0; ts.length = 0;
+                    a.drive(modes[n++ % 3]);
+                    await wait(60);
+                    if (style !== 'off') {
+                        assert.strictEqual(client.photos().length, 2, style + ': the old photo under the new one');
+                        assert.deepStrictEqual(seen, [styleOf[style]], style);
+                        const [, fresh] = client.photos().find(([r]) => r === Math.max(...client.photos().map(([x]) => x)));
+                        assert.deepStrictEqual(fresh.uniforms.u_span, [1240]);
+                        assert.deepStrictEqual(fresh.uniforms.u_alpha, [1], style + ': the shader masks it, not the alpha');
+                    }
+                    await wait(1250);
+                    assert.strictEqual(client.photos().length, 1, style + ': done, the old photo dropped');
+                    if (style !== 'off') assert.ok(ts.length >= 6 && ts[ts.length - 1] === 1, style + ': u_t to 1: ' + ts.slice(-3));
+                    assert.ok(dash.widgets.size >= built - 1, style);
+                }
+                a.hu.settings.set('photoTransition', 'random');
+                const picked = [];
+                for (let i = 0; i < 4; i++) {
+                    seen.length = 0;
+                    a.drive(modes[n++ % 3]);
+                    await wait(1250);
+                    picked.push(seen[0]);
+                }
+                assert.ok(picked.every((v) => v >= 1 && v <= 3), 'moving styles only: ' + picked);
+                assert.ok(picked.every((v, i) => !i || v !== picked[i - 1]), 'never the same twice running: ' + picked);
+                assert.ok(client.peakBytes <= 8e6, 'peak ' + (client.peakBytes / 1e6).toFixed(1) + ' MB');
             } finally { dash.stop(); }
         },
         async 'a refused etc2 photo falls back to the rgba photo'() {

@@ -30,17 +30,28 @@ const textRaster = require('./hud_text');
 
 const POPUP_SLOT = 0x202;
 /*
- * A drive-mode change between two whole-cluster designs: a black honeycomb with orange rims, lit orange only at
- * its front, sweeps in over the old design (an
- * effect layer, no pixels), the old design goes and the new one is built under them while a label names the
- * mode, then the hexagons sweep out. The two designs never exist together: each is 7-11 MB of the service's
- * 16 MB. The label is an asset the hexagons' shader draws, so the change adds one layer (C3 and E3 have seven,
- * and an older cluster-render allows a connection eight).
+ * A drive-mode change between two whole-cluster designs: a dark honeycomb with orange rims, lit at its moving
+ * front, covers the old design (an effect layer, no pixels) in the order the style picks, the old design goes and
+ * the new one is built under it while a label names the mode, then the honeycomb uncovers it. The two designs never
+ * exist together: each is 7-11 MB of the service's 16 MB. The label is an r8 asset (one byte a pixel, at most
+ * 1200x300) the hexagons' shader colours and draws, so the change adds one layer (C3 and E3 have six on this
+ * connection, and cluster-render allows a connection eight).
  */
-const TRANSITION = { inMs: 420, holdMinMs: 260, holdMaxMs: 1500, outMs: 420, cell: 22, z: 900 };
-const TRANSITION_WORDS = { sport: ['SPORT', '第一種戦闘配置'], comfort: ['COMFORT', '通常態勢'], eco: ['ECO PRO', '活動限界'] };
-const TRANSITION_LABEL = { w: 720, h: 132 };
+const TRANSITION = { cell: 22, z: 900, holdMaxMs: 1500 };
+/*
+ * The styles (the setting "dashTransitionStyle"; shaders.evahexwipe u_style). Covering slowly, uncovering quicker, so the
+ * gauges are back soon. label: the r8 mask's size and place in the layer (x 'c' centred, or a fraction from the left).
+ */
+const TRANSITION_STYLES = {
+    sweep: { style: 0, inMs: 640, holdMinMs: 260, outMs: 420, label: { w: 720, h: 132, x: 'c' } },
+    atfield: { style: 1, inMs: 820, holdMinMs: 480, outMs: 480, label: { w: 1000, h: 200, x: 'c' } },
+    blue: { style: 2, inMs: 880, holdMinMs: 520, outMs: 520, label: { w: 1100, h: 150, x: 'c' } },
+    title: { style: 3, inMs: 760, holdMinMs: 600, outMs: 460, label: { w: 1200, h: 300, x: 0.18 } },
+};
+const TRANSITION_RANDOM = ['sweep', 'atfield', 'blue', 'title'];
+const TRANSITION_WORDS = { sport: ['SPORT', '第一種戦闘配置', '弐'], comfort: ['COMFORT', '通常態勢', '壱'], eco: ['ECO PRO', '活動限界', '参'] };
 const EVA_ORANGE = [255, 136, 0];
+const WHITE = [255, 255, 255];
 const GEAR_LETTER = [1380, 660, 80, 60];   // BMW's gear letter: no layer's rect may meet it (the kombi then paints its black box)
 /*
  * The whole designs' black bottom strips (botcover_l/_c/_r: three rects around the gear letter, as Shadow's) are the same
@@ -57,6 +68,9 @@ class EvaDash extends EvaHud {
         super(ctx, { primary, target: 'panel', statusName: 'DASH', clientName: ctx.spec.id + '_dash', textRateMs: TEXT_MS });
         this.primary = primary;
         this.readings = primary.readings;
+        // 0.9.0: the on / off switch became a choice of styles; a car that had it off keeps it off
+        const v = ctx.settings.values || {};
+        if (v.dashTransition === false && !v._trStyleV) { v._trStyleV = 1; ctx.settings.set('dashTransitionStyle', 'off'); }
     }
 
     _layoutName() {
@@ -200,7 +214,7 @@ class EvaDash extends EvaHud {
         if (this.transition) return true;          // one under way picks up the newest design when it swaps
         const next = this._layoutName();
         const whole = (n) => n === 'eva' || WHOLE_DESIGNS.indexOf(n) >= 0;
-        return this.client.ready && this.setting('dashTransition') !== false && this.target === 'panel' &&
+        return this.client.ready && this.setting('dashTransitionStyle') !== 'off' && this.target === 'panel' &&
             whole(this.activeName) && whole(next) && !this.alertKey && !this.alertLayers && !this.givingWay;
     }
 
@@ -225,9 +239,10 @@ class EvaDash extends EvaHud {
         if (t) {
             // a change while sweeping out: sweep back in from where the hexagons are, and swap again
             if (t.phase === 'out') {
-                const out = Math.min(1, (now - t.from) / TRANSITION.outMs);
+                const out = Math.min(1, (now - t.from) / t.st.outMs);
                 t.phase = 'in';
-                t.from = now - (1 - out) * TRANSITION.inMs;
+                t.from = now - (1 - out) * t.st.inMs;
+                this._holdLook(t, -1);
             }
             return;
         }
@@ -240,38 +255,87 @@ class EvaDash extends EvaHud {
         this.client.uniform(ref, 'u_color', EVA_ORANGE.map((v) => v / 255));
         this.client.uniform(ref, 'u_dark', [0.02, 0.01, 0.0]);
         this.client.uniform(ref, 'u_t', [0]);
+        const name = this._pickStyle(), st = TRANSITION_STYLES[name];
+        this.client.uniform(ref, 'u_style', [st.style]);
         this.client.uniform(ref, 'u_labelOn', [0]);
+        this.client.uniform(ref, 'u_stretch', [1]);
+        this.client.uniform(ref, 'u_flash', [0, 0]);
+        this.client.uniform(ref, 'u_dim', [0]);
+        this.client.uniform(ref, 'u_band', [0, 0, 0, 0]);
         const g = GEAR_LETTER, hx = g[0] - r.x, hy = g[1] - r.y;
         const meets = hx < r.w && hy < r.h && hx + g[2] > 0 && hy + g[3] > 0;
         this.client.uniform(ref, 'u_hole', meets ? [hx, hy, g[2], g[3]] : [0, 0, 0, 0]);
-        this.transition = { phase: 'in', from: now, cover: ref, label: null, rect: r };
+        this.transition = { phase: 'in', from: now, cover: ref, label: null, rect: r, name, st };
         this._transitionLabel(this.transition);
-        this.log.info('drive-mode change: hexagons over ' + this.activeName + ' -> ' + this._layoutName());
+        this.log.info('drive-mode change (' + name + '): hexagons over ' + this.activeName + ' -> ' + this._layoutName());
     }
 
     _stepTransition(now) {
         const t = this.transition;
         if (this.alertKey || this.givingWay) { this._endTransition(); return; }      // an alert or a BMW pop-up goes first
         if (t.phase === 'in') {
-            const p = Math.min(1, (now - t.from) / TRANSITION.inMs);
+            const p = Math.min(1, (now - t.from) / t.st.inMs);
             this.client.uniform(t.cover, 'u_t', [Math.round(p * 1000) / 1000]);
             if (p < 1) return;
             // covered: the new design goes up under the hexagons
             if (this._layoutName() !== this.activeName) this._rebuild();
             this._transitionLabel(t);          // the mode may have changed again during the sweep
-            if (t.label) this.client.uniform(t.cover, 'u_labelOn', [1]);
             t.phase = 'hold';
             t.from = now;
+            this._holdLook(t, 0);
         } else if (t.phase === 'hold') {
             const held = now - t.from;
-            if (held < TRANSITION.holdMinMs || (held < TRANSITION.holdMaxMs && !this._allShown())) return;
-            this.client.uniform(t.cover, 'u_labelOn', [0]);
+            this._holdLook(t, held);
+            if (held < t.st.holdMinMs || (held < TRANSITION.holdMaxMs && !this._allShown())) return;
+            this._holdLook(t, -1);
             t.phase = 'out';
             t.from = now;
         } else {
-            const p = Math.min(1, (now - t.from) / TRANSITION.outMs);
+            const p = Math.min(1, (now - t.from) / t.st.outMs);
             this.client.uniform(t.cover, 'u_t', [1 + Math.round(p * 1000) / 1000]);
             if (p >= 1) this._endTransition();
+        }
+    }
+
+    /** The style's own setting, or for Random any but the last one. */
+    _pickStyle() {
+        let name = this.setting('dashTransitionStyle');
+        if (name === 'random') {
+            const pool = TRANSITION_RANDOM.filter((n) => n !== this.lastStyle);
+            name = pool[Math.floor(Math.random() * pool.length)];
+        }
+        if (!TRANSITION_STYLES[name]) name = 'atfield';
+        this.lastStyle = name;
+        return name;
+    }
+
+    /**
+     * The label's entrance while covered, ms since covered (-1: gone, before uncovering). Sweep: shown. AT field: a white
+     * flash and the name snapping in from wide. Pattern Blue: the band slides in from the right, then blinks. Title card:
+     * a white line opens down the middle, the honeycomb goes dark, the card shows.
+     */
+    _holdLook(t, ms) {
+        const set = (k, v) => { const key = JSON.stringify(v); if (t.look && t.look[k] === key) return; (t.look = t.look || {})[k] = key; this.client.uniform(t.cover, k, v); };
+        const ss = (e0, e1, x) => { const y = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return y * y * (3 - 2 * y); };
+        const r2 = (x) => Math.round(x * 100) / 100;
+        const on = ms >= 0 && !!t.label;
+        const style = t.st.style;
+        if (!on) {
+            set('u_labelOn', [0]); set('u_stretch', [1]); set('u_flash', [0, 0]); set('u_dim', [0]);
+            return;
+        }
+        if (style === 0) { set('u_labelOn', [1]); return; }
+        if (style === 1) {
+            set('u_labelOn', [r2(ss(0, 60, ms))]);
+            set('u_stretch', [r2(1 + 0.5 * (1 - ss(0, 140, ms)))]);
+            set('u_flash', [ms < 60 ? 0.5 : 0, 0]);
+        } else if (style === 2) {
+            set('u_band', [t.band[0], t.band[1], 2, Math.round((1 - ss(0, 140, ms)) * t.rect.w)]);
+            set('u_labelOn', [ms < 260 || Math.floor(ms / 80) % 2 === 0 ? 1 : 0.85]);
+        } else {
+            set('u_dim', [r2(ss(0, 80, ms))]);
+            set('u_flash', ms < 70 ? [1, Math.round(2 + ms * 8)] : [0, 0]);
+            set('u_labelOn', [r2(ss(50, 110, ms))]);
         }
     }
 
@@ -283,38 +347,50 @@ class EvaDash extends EvaHud {
     }
 
     /**
-     * The mode in the middle of the hexagons, DRIVE MODE >> SPORT, 第一種戦闘配置 and a NERV line, as an rgba8
-     * asset the hexagons' shader samples. Made once a change, drawn again only if the mode is another by the swap.
+     * The mode's name as an r8 mask the hexagons' shader samples and colours (u_c1 / u_c2 either side of u_split).
+     * Made once a change, drawn again only if the mode is another by the swap. Each style lays it out its own way.
      */
     _transitionLabel(t) {
         const mode = this._driveProfile();
         if (t.label && t.labelMode === mode) return;
         const words = TRANSITION_WORDS[mode] || TRANSITION_WORDS.comfort;
-        const w = Math.min(TRANSITION_LABEL.w, t.rect.w), h = TRANSITION_LABEL.h;
+        const L = t.st.label, w = Math.min(L.w, t.rect.w), h = Math.min(L.h, t.rect.h);
+        const col = (c) => c.map((v) => v / 255);
         if (!t.label) {
-            t.label = this.client.asset({ target: 'panel', format: 'rgba8', w, h, sampling: 'nearest' });
+            t.label = this.client.asset({ target: 'panel', format: 'r8', w, h, sampling: 'nearest' });
             if (!t.label) return;
             this.client.bind(t.cover, 'u_label', t.label);
-            this.client.uniform(t.cover, 'u_labelRect', [Math.round((t.rect.w - w) / 2), Math.round((t.rect.h - h) / 2), w, h]);
+            const x = L.x === 'c' ? Math.round((t.rect.w - w) / 2) : Math.round(t.rect.w * L.x);
+            const y = Math.round((t.rect.h - h) / 2);
+            this.client.uniform(t.cover, 'u_labelRect', [x, y, w, h]);
+            const split = [[0, 0.42], [0, 0.27], [1, 0.485], [0, 2]][t.st.style];
+            const c1 = t.st.style === 2 ? WHITE : t.st.style === 3 ? WHITE : EVA_ORANGE;
+            const c2 = t.st.style === 2 ? EVA_ORANGE : WHITE;
+            this.client.uniform(t.cover, 'u_split', split);
+            this.client.uniform(t.cover, 'u_c1', col(c1));
+            this.client.uniform(t.cover, 'u_c2', col(c2));
+            if (t.st.style === 0) this.client.uniform(t.cover, 'u_band', [y, y + h, 1, x]);
+            t.band = [y, y + h];
         }
         t.labelMode = mode;
-        const px = Buffer.alloc(w * h * 4);
-        for (let i = 0; i < w * h; i++) px[i * 4 + 3] = 225;                          // a black band to read on
-        for (const y of [0, 1, h - 2, h - 1]) for (let x = 0; x < w; x++) {          // orange rules top and bottom
-            const o = (y * w + x) * 4; px[o] = EVA_ORANGE[0]; px[o + 1] = EVA_ORANGE[1]; px[o + 2] = EVA_ORANGE[2]; px[o + 3] = 255;
+        const px = Buffer.alloc(w * h);
+        const over = (src) => { for (let i = 0; i < src.length; i++) if (src[i] > px[i]) px[i] = src[i]; };
+        const text = (str, o) => over(textRaster.mask(w, h, str, o));
+        if (t.st.style === 0) {
+            text('DRIVE MODE  >>  ' + words[0], { font: 'tr_en', align: 'center', offsetY: 10 });
+            text(words[1], { font: 'tr_jp', align: 'center', offsetY: 64 });
+        } else if (t.st.style === 1) {
+            text('DRIVE MODE  >>  ' + words[0], { font: 'tr_en', align: 'center', offsetY: 0 });
+            text(words[1], { font: 'tr_big', align: 'center', offsetY: 60 });
+        } else if (t.st.style === 2) {
+            text(words[0], { font: 'tr_hero', align: 'right', x: -Math.round(w * 0.53), offsetY: 4 });
+            text(words[1], { font: 'tr_jp', align: 'left', x: Math.round(w * 0.5), offsetY: 22 });
+            text('DRIVE MODE CHANGE  //  MAGI APPROVED', { font: 'tr_sub', align: 'left', x: Math.round(w * 0.5), offsetY: 90 });
+        } else {
+            text('第 ' + words[2] + ' 話', { font: 'tr_jp', align: 'left', offsetY: 0 });
+            text(words[1], { font: 'tr_big', align: 'left', offsetY: 56 });
+            text('DRIVE MODE : ' + words[0], { font: 'tr_en', align: 'left', offsetY: 210 });
         }
-        const over = (src) => {
-            for (let i = 0; i < w * h; i++) {
-                const a = src[i * 4 + 3] / 255;
-                if (!a) continue;
-                const o = i * 4;
-                for (let c = 0; c < 3; c++) px[o + c] = Math.round(src[o + c] * a + px[o + c] * (1 - a));
-                px[o + 3] = Math.max(px[o + 3], src[o + 3]);
-            }
-        };
-        over(textRaster.drawText(w, h, 'DRIVE MODE  >>  ' + words[0], { font: 'tr_en', align: 'center', offsetY: 10, color: EVA_ORANGE.concat(255) }));
-        over(textRaster.drawText(w, h, words[1], { font: 'tr_jp', align: 'center', offsetY: 56, color: [255, 255, 255, 255] }));
-        over(textRaster.drawText(w, h, 'NERV  //  SYNC', { font: 'tr_sub', align: 'right', x: -14, offsetY: h - 26, color: EVA_ORANGE.concat(200) }));
         this.client.pixels(t.label, null, px);
     }
 

@@ -24,11 +24,66 @@ const TEXT_MS = 250;
 const POPUP_SLOT = 0x202;   // BMW's cluster pop-ups, the same slot the EVA dash yields
 // The photos go up once as etc2rgba assets (1 byte a pixel, charged once: 1.2 MB each in
 // cluster-render's 16 MB of pixel memory, against 9.8 MB for one rgba image layer) and an
-// effect layer draws one. A drive-mode swap puts a new effect layer on top and fades it in;
-// nothing is uploaded, so the stock gauges under the panel never show through.
-const PHOTO_FS = 'precision mediump float;uniform sampler2D u_photo;uniform float u_alpha;varying vec2 v_uv;' +
-    'void main(){vec4 c=texture2D(u_photo,v_uv);gl_FragColor=vec4(c.rgb,c.a*u_alpha);}';
-const PHOTO_FADE_MS = 250;
+// effect layer draws one. A drive-mode swap puts a new effect layer on top that shows the new
+// photo in the style picked ("photoTransition"), then drops the one under it; nothing is
+// uploaded, so the stock gauges under the panel never show through.
+//   u_style 0 fade (u_alpha), 1 wave (a breaking wave left to right, foam on its crest), 2 flag stripes (four
+//           diagonal bands in the photos' navy / orange / cream), 3 light sweep (a warm sheen, the new photo behind it)
+//   u_t     0..1 through the change, u_span the photo's art width px (the data column sits on top past it)
+const PHOTO_FS = `precision mediump float;
+uniform sampler2D u_photo;
+uniform float u_alpha;
+uniform float u_style;
+uniform float u_t;
+uniform float u_span;
+uniform vec2 u_size;
+varying vec2 v_uv;
+const vec3 ORANGE = vec3(0.918, 0.333, 0.016);
+const vec3 CREAM = vec3(0.98, 0.95, 0.88);
+const vec3 NAVY = vec3(0.06, 0.09, 0.18);
+void main() {
+    vec4 c = texture2D(u_photo, v_uv);
+    if (u_style < 0.5) { gl_FragColor = vec4(c.rgb, c.a * u_alpha); return; }
+    vec2 px = v_uv * u_size;
+    float t = u_t, m = 0.0;
+    vec3 deco = vec3(0.0);
+    float da = 0.0;
+    if (u_style < 1.5) {
+        float edge = -260.0 + t * (u_span + 520.0) + 40.0 * sin(px.y / 38.0 + t * 12.0) + 10.0 * sin(px.y / 21.0 - t * 15.0)
+            + 90.0 * (1.0 - px.y / u_size.y);
+        m = smoothstep(edge, edge - 6.0, px.x);
+        float body = smoothstep(edge - 70.0, edge - 30.0, px.x) * (1.0 - smoothstep(edge - 2.0, edge + 2.0, px.x));
+        float foam = clamp(1.0 - abs(px.x - edge + 6.0) / 8.0, 0.0, 1.0);
+        float line = clamp(1.0 - abs(px.x - edge + 22.0) / 3.0, 0.0, 1.0);
+        deco = mix(NAVY, CREAM, foam); da = max(body * 0.75, foam);
+        deco = mix(deco, ORANGE, line * 0.8); da = max(da, line * 0.8);
+    } else if (u_style < 2.5) {
+        float k = px.x + (u_size.y - px.y) * 0.6, bw = 70.0;
+        float pos = -20.0 + t * (u_span + u_size.y * 0.6 + 4.0 * bw + 40.0);
+        m = smoothstep(pos - 4.0 * bw + 1.0, pos - 4.0 * bw - 1.0, k);
+        for (int i = 0; i < 4; i++) {
+            float hi = pos - float(i) * bw, lo = hi - bw;
+            float a = smoothstep(hi + 1.0, hi - 1.0, k) * smoothstep(lo - 1.0, lo + 1.0, k);
+            vec3 bc = i == 0 ? NAVY : i == 2 ? CREAM : ORANGE;
+            deco = mix(deco, bc, a); da = max(da, a);
+        }
+    } else {
+        float pos = -200.0 + t * (u_span + 400.0);
+        float sl = px.x + (px.y - u_size.y * 0.5) * 0.35;
+        float d = sl - pos;
+        m = smoothstep(pos + 40.0, pos - 120.0, sl);
+        float glow = exp(-(d / 60.0) * (d / 60.0)) * 0.85 + exp(-(d / 8.0) * (d / 8.0)) * 0.5;
+        deco = vec3(1.0, 0.85, 0.7); da = clamp(glow * 0.55, 0.0, 1.0);
+    }
+    if (px.x > u_span + 200.0) m = step(1.0, t);          // under the data column: the photos are black there
+    da *= 1.0 - smoothstep(u_span - 80.0, u_span + 20.0, px.x);   // and nothing of the wave / bands / sheen behind its numbers
+    float pa = m * c.a;
+    gl_FragColor = vec4(mix(c.rgb, deco, da), da + pa * (1.0 - da));
+}`;
+// the styles: [u_style, ms]; Random picks one of the moving ones, not the last
+const PHOTO_STYLES = { off: [0, 0], fade: [0, 250], wave: [1, 1100], stripes: [2, 1000], sheen: [3, 900] };
+const PHOTO_RANDOM = ['wave', 'stripes', 'sheen'];
+const PHOTO_SPAN = 1240;     // the photos' art ends about here (tools/shadow_geom.py ART_RIGHT), the data column's black after
 
 class ShadowDash extends EvaHud {
     constructor(ctx) {
@@ -64,7 +119,7 @@ class ShadowDash extends EvaHud {
 
     _needsRebuild(key) {
         if (key === 'enabled' || /^photo(Comfort|Sport|Eco)$/.test(key)) return this._layoutName() !== this.activeName;
-        return key !== 'demo';
+        return key !== 'demo' && key !== 'photoTransition';
     }
 
     /** Comfort's photo until the car has named a drive mode. */
@@ -149,21 +204,42 @@ class ShadowDash extends EvaHud {
         return true;
     }
 
-    /** Shows w.photo; the shown one stays below until the new one has faded in. */
+    /** Shows w.photo; the shown one stays below until the new one is all there. */
     _showPhoto(w) {
         if (w.w !== PHOTO_W || w.h !== PHOTO_H || PHOTOS.indexOf(w.photo) < 0 || !this._photoAssets()) return false;
         const cur = this.photo;
         if (cur && cur.name === w.photo) return true;
-        if (this.photoFade) this._endFade();          // a swap during a swap: the one fading in is the shown one
+        if (this.photoFade) this._endFade();          // a swap during a swap: the one coming in is the shown one
         const ref = this.client.effect({ target: this.target, klass: w.class || 'ambient', z: w.z || 0,
             x: w.x, y: w.y, w: w.w, h: w.h, fs: PHOTO_FS });
         if (!ref) return false;
         this.client.bind(ref, 'u_photo', this.photoAssets[w.photo]);
-        this.client.uniform(ref, 'u_alpha', [cur ? 0 : 1]);
+        const name = cur ? this._photoStyle() : 'off', st = PHOTO_STYLES[name];
+        this.client.uniform(ref, 'u_size', [PHOTO_W, PHOTO_H]);
+        this.client.uniform(ref, 'u_span', [PHOTO_SPAN]);
+        this.client.uniform(ref, 'u_style', [st[0]]);
+        this.client.uniform(ref, 'u_t', [0]);
+        this.client.uniform(ref, 'u_alpha', [st[1] && st[0] === 0 ? 0 : 1]);
         if (this.givingWay) this.client.set(ref, { visible: 0 });
         this.photo = { ref, name: w.photo };
-        if (cur) this.photoFade = { ref, under: cur.ref, from: Date.now() };
+        if (cur) {
+            this.photoFade = { ref, under: cur.ref, from: Date.now(), ms: st[1], style: st[0] };
+            if (!st[1]) this._endFade();
+            else this.log.info('photo change: ' + name);
+        }
         return true;
+    }
+
+    /** The photoTransition setting, or for Random any moving one but the last. */
+    _photoStyle() {
+        let name = this.setting('photoTransition');
+        if (name === 'random') {
+            const pool = PHOTO_RANDOM.filter((n) => n !== this.lastPhotoStyle);
+            name = pool[Math.floor(Math.random() * pool.length)];
+        }
+        if (!PHOTO_STYLES[name]) name = 'wave';
+        this.lastPhotoStyle = name;
+        return name;
     }
 
     _endFade() {
@@ -171,15 +247,16 @@ class ShadowDash extends EvaHud {
         this.photoFade = null;
         if (!f) return;
         this.client.uniform(f.ref, 'u_alpha', [1]);
+        this.client.uniform(f.ref, 'u_t', [1]);
         this.client.drop(f.under);
     }
 
     _stepFade(now) {
         const f = this.photoFade;
         if (!f) return;
-        const t = (now - f.from) / PHOTO_FADE_MS;
+        const t = (now - f.from) / f.ms;
         if (t >= 1) { this._endFade(); return; }
-        if (t > 0) this.client.uniform(f.ref, 'u_alpha', [Math.round(t * 100) / 100]);
+        if (t > 0) this.client.uniform(f.ref, f.style === 0 ? 'u_alpha' : 'u_t', [Math.round(t * 1000) / 1000]);
     }
 
     _dropPhotos() {

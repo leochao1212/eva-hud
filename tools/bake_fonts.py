@@ -49,9 +49,12 @@ CLUSTER_FONTS = [
 EVA_FONTS = [
     ('e_ui', 'BarlowCondensed-SemiBold.ttf', 32, UPPER + DIGITS + ' :./-+%·'),
     # the dash's drive-mode change (shared/eva_dash.js TRANSITION_WORDS): the mode in Barlow, its name in Matisse
-    ('tr_en', 'BarlowCondensed-Bold.ttf', 46, UPPER + ' >/'),
-    ('tr_jp', 'MatisseSub-ShipporiMinchoB1-EB.ttf', 40, '第一種戦闘配置通常態勢活動限界'),
+    ('tr_en', 'BarlowCondensed-Bold.ttf', 46, UPPER + ' >/:'),
+    ('tr_jp', 'MatisseSub-ShipporiMinchoB1-EB.ttf', 40, '第一種戦闘配置通常態勢活動限界壱弐参話 '),
     ('tr_sub', 'BarlowCondensed-SemiBold.ttf', 18, UPPER + DIGITS + ' /%.:-'),
+    # the AT field and the title card's big name, Pattern Blue's mode word
+    ('tr_big', 'MatisseSub-ShipporiMinchoB1-EB.ttf', 120, '第一種戦闘配置通常態勢活動限界'),
+    ('tr_hero', 'BarlowCondensed-Bold.ttf', 128, UPPER + ' '),
 ]
 FONTS = {'idrive_hud_widgets': HUD_FONTS, 'cluster_themes': CLUSTER_FONTS, 'eva_hud': EVA_FONTS}
 PAD = 2

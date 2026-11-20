@@ -567,14 +567,20 @@ void main() {
 }
 `;
 
-const EVAHEXWIPE = `// The dash's drive-mode change: a black honeycomb with thin orange rims sweeps in from the left
-// until it covers the layer, then sweeps out again. Only the sweep's front is lit orange: a cell glows
-// while it grows, then settles black. No pixels: one uniform, u_t, moves it.
-//   u_t     0..1 the sweep in (0: nothing, 1: covered), 1..2 the sweep out (2: nothing again)
-//   u_size  layer px, u_cell a hexagon's side px, u_color the hexagons' rgb, u_dark the gaps' rgb
-//   u_label an rgba8 asset drawn over the hexagons at u_labelRect (x, y, w, h px) while u_labelOn is 1:
-//           the mode's name, in this layer so the change costs one layer, not two
-//   u_hole  x, y, w, h px left see-through: BMW's gear letter (covering it makes the kombi draw a black box)
+const EVAHEXWIPE = `// The dash's drive-mode change: a dark honeycomb with orange rims covers the layer, holds the mode's
+// name, then uncovers it. The cells' order is the style; only the moving front glows. No pixels: uniforms move it.
+//   u_style 0 sweep (left to right), 1 AT field (rings out of the centre, octagon ripples on the front),
+//           2 Pattern Blue (MAGI cascade: left to right at random, a few cells flash red), 3 title card (from both
+//           sides into the middle, out of the middle again)
+//   u_t     0..1 covering (0: nothing, 1: covered), 1..2 uncovering (2: nothing again)
+//   u_size  layer px, u_cell a hexagon's side px, u_color the rims' rgb, u_dark the cells' rgb
+//   u_label an r8 mask (the mode's name) at u_labelRect (x, y, w, h px), drawn with u_labelOn (0..1) in u_c1 before
+//           u_split.y and u_c2 after it, along x (u_split.x 1) or y (0); u_stretch widens it about its centre
+//   u_band  y0, y1 px, kind (1 black band with orange rules, as wide as the label; 2 black band in hazard tape, to the
+//           layer's right edge), x px it starts at
+//   u_flash amount, half width px of a white line down the middle (0: the whole layer)
+//   u_dim   0..1 darkens the honeycomb behind the label (the title card)
+//   u_hole  x, y, w, h px left see-through
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
 #else
@@ -584,12 +590,22 @@ varying vec2 v_uv;
 uniform vec2 u_size;
 uniform float u_cell;
 uniform float u_t;
+uniform float u_style;
 uniform vec3 u_color;
 uniform vec3 u_dark;
 uniform sampler2D u_label;
 uniform vec4 u_labelRect;
 uniform float u_labelOn;
+uniform float u_stretch;
+uniform vec2 u_split;
+uniform vec3 u_c1;
+uniform vec3 u_c2;
+uniform vec4 u_band;
+uniform vec2 u_flash;
+uniform float u_dim;
 uniform vec4 u_hole;
+
+float hash(vec2 c) { return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }
 
 void main() {
     vec2 px = v_uv * u_size;
@@ -597,32 +613,75 @@ void main() {
         gl_FragColor = vec4(0.0);
         return;
     }
-    vec2 p = v_uv * u_size / u_cell;
+    vec2 p = px / u_cell;
     vec2 s = vec2(1.7320508, 3.0);
     vec2 a = mod(p, s) - s * 0.5;
     vec2 b = mod(p - s * 0.5, s) - s * 0.5;
     vec2 g = dot(a, a) < dot(b, b) ? a : b;            // from the nearest hexagon's centre
-    float x = clamp((p.x - g.x) * u_cell / u_size.x, 0.0, 1.0);   // that centre, 0..1 across the layer
-    const float SPREAD = 0.35;
-    float k = u_t <= 1.0
-        ? smoothstep(0.0, 1.0, (u_t * (1.0 + SPREAD) - x) / SPREAD)
-        : 1.0 - smoothstep(0.0, 1.0, ((u_t - 1.0) * (1.0 + SPREAD) - x) / SPREAD);
+    vec2 cc = (p - g) * u_cell;                         // that centre, px
+    float x = clamp(cc.x / u_size.x, 0.0, 1.0);
+    float h = hash(floor(cc + 0.5));
+    bool back = u_t > 1.0;
+    float t = back ? u_t - 1.0 : u_t;
+    // d: when a cell turns, 0..1 of the way through
+    float spread = 0.35;
+    float d = x;
+    vec2 rel = cc - u_size * 0.5;
+    float ring = max(abs(rel.x) * 0.8660254 + abs(rel.y) * 0.5, abs(rel.y)) / (max(u_size.x * 0.4330127 + u_size.y * 0.25, u_size.y * 0.5) + 1.0);
+    if (u_style > 0.5 && u_style < 1.5) { d = ring; spread = 0.25; }
+    else if (u_style > 1.5 && u_style < 2.5) { d = 0.55 * x + 0.45 * h; }
+    else if (u_style > 2.5) { float m = abs(x - 0.5) * 2.0; d = back ? m : 1.0 - m; spread = 0.3; }
+    float k = smoothstep(0.0, 1.0, (t * (1.0 + spread) - d) / spread);
+    if (back) k = 1.0 - k;
     vec2 q = abs(g);
     float r = max(q.x, q.x * 0.5 + q.y * 0.8660254);   // 0 at the centre, 0.866 at the cell's edge
-    float size = 0.8660254 * 0.90 * k;                  // the hexagon grows with k, leaving a black gap
+    float size = 0.8660254 * 0.92 * k;
     float aa = 1.0 / u_cell;
     float fill = 1.0 - smoothstep(size - aa, size + aa, r);
-    float rim = fill * smoothstep(size - 0.075 - aa, size - 0.075 + aa, r);   // the thin orange line
-    float glow = 4.0 * k * (1.0 - k);                   // lit only while the cell grows (or shrinks)
-    vec3 inner = mix(u_dark, u_color, glow * 0.85);
-    vec3 c = mix(vec3(0.0), inner, fill);
-    c = mix(c, u_color, rim * 0.9);
+    float rim = fill * smoothstep(size - 0.09 - aa, size - 0.09 + aa, r);
+    float glow = 4.0 * k * (1.0 - k);                   // lit only while the cell turns
+    vec3 inner = u_dark + u_color * (0.10 + 0.22 * step(0.84, h) + 0.35 * glow);
+    if (u_style > 1.5 && u_style < 2.5 && !back && h > 0.93 && k > 0.5) {
+        float fl = (0.5 + 0.5 * sin((t * 1.35 - d) * 30.0)) * (1.0 - t);
+        inner = mix(inner, vec3(1.0, 0.12, 0.08), fl);
+    }
+    float dim = 1.0 - 0.75 * u_dim;
+    vec3 c = inner * fill * dim;
+    c = mix(c, u_color, rim * clamp(0.62 * dim + glow * 0.7, 0.0, 1.0));
     float alpha = clamp(k * 1.6, 0.0, 1.0);
-    vec2 lp = (v_uv * u_size - u_labelRect.xy) / u_labelRect.zw;
-    if (u_labelOn > 0.5 && lp.x >= 0.0 && lp.y >= 0.0 && lp.x <= 1.0 && lp.y <= 1.0) {
-        vec4 l = texture2D(u_label, lp);
-        c = mix(c, l.rgb, l.a);
-        alpha = max(alpha, l.a);
+    if (u_style > 0.5 && u_style < 1.5 && t > 0.0 && t < 1.0) {      // AT field: octagons riding the front
+        float ang = atan(px.y - u_size.y * 0.5, px.x - u_size.x * 0.5);
+        float oct = length(px - u_size * 0.5) * 0.9238795 / cos(mod(ang, 0.7853982) - 0.3926991);
+        for (int j = 0; j < 3; j++) {
+            float rr = t * u_size.x * 0.62 - float(j) * 52.0;
+            float o = clamp(1.0 - abs(oct - rr) / 4.0, 0.0, 1.0) * (1.0 - t) * (1.0 - float(j) * 0.3);
+            c = mix(c, u_color, o);
+            alpha = max(alpha, o);
+        }
+    }
+    if (u_band.z > 0.5 && u_labelOn > 0.0 && px.x >= u_band.w && (u_band.z > 1.5 || px.x < u_labelRect.x + u_labelRect.z)) {
+        float tape = u_band.z > 1.5 ? 14.0 : 2.0;
+        if (px.y >= u_band.x - tape && px.y < u_band.y + tape) {
+            bool edge = px.y < u_band.x || px.y >= u_band.y;
+            vec3 bc = vec3(0.0);
+            if (edge) bc = u_band.z > 1.5 && mod(px.x - u_band.w + px.y, 28.0) >= 14.0 ? vec3(0.0) : u_color;
+            float ba = (edge ? 1.0 : 0.92) * u_labelOn;
+            c = mix(c, bc, ba);
+            alpha = max(alpha, ba);
+        }
+    }
+    vec2 lc = u_labelRect.xy + u_labelRect.zw * 0.5;
+    vec2 lp = (vec2(lc.x + (px.x - lc.x) / max(u_stretch, 0.01), px.y) - u_labelRect.xy) / u_labelRect.zw;
+    if (u_labelOn > 0.0 && lp.x >= 0.0 && lp.y >= 0.0 && lp.x <= 1.0 && lp.y <= 1.0) {
+        float l = texture2D(u_label, lp).r * u_labelOn;
+        vec3 lcol = (u_split.x > 0.5 ? lp.x : lp.y) < u_split.y ? u_c1 : u_c2;
+        c = mix(c, lcol, l);
+        alpha = max(alpha, l);
+    }
+    if (u_flash.x > 0.0) {
+        float f = u_flash.y > 0.0 ? u_flash.x * clamp(1.0 - abs(px.x - u_size.x * 0.5) / u_flash.y, 0.0, 1.0) : u_flash.x;
+        c = mix(c, vec3(1.0), f);
+        alpha = max(alpha, f);
     }
     gl_FragColor = vec4(c, alpha);
 }

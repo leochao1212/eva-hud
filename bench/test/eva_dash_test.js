@@ -41,7 +41,7 @@ class FakeClient {
     _add(kind, o) {
         const ref = this.nextRef++;
         if (kind !== 'asset' && Array.from(this.layers.values()).filter((l) => l.kind !== 'asset').length >= 8) { this.refused.push(o.target + ': too many layers'); return ref; }
-        const bytes = kind === 'image' ? o.iw * o.ih * 4 * 2 : kind === 'asset' ? o.w * o.h * 4 * 2 : 0;
+        const bytes = kind === 'image' ? o.iw * o.ih * 4 * 2 : kind === 'asset' ? o.w * o.h * (o.format === 'r8' ? 1 : 4) * 2 : 0;
         if (FakeClient.memory() + bytes > 16 * 1024 * 1024) { this.refused.push(o.target + ': pixel memory is full'); return ref; }
         this.layers.set(ref, Object.assign({ kind, visible: 1, bytes }, o));
         return ref;
@@ -1818,7 +1818,7 @@ const tests = {
         counts.evas.forEach((e) => e.stop && e.stop());
     },
     async 'a drive-mode change between whole designs: hexagons in, the design swaps under them, hexagons out'() {
-        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3', dashSport: 'whole', dashEco: 'e3' });
+        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3', dashSport: 'whole', dashEco: 'e3', dashTransitionStyle: 'sweep' });
         await wait(SETTLE_MS);
         const d = counts.evas.find((e) => e.primary), c = a.dash();
         assert.strictEqual(d.activeName, 'c3');
@@ -1838,18 +1838,18 @@ const tests = {
         assert.ok(hex.w > 1800 && hex.h >= 600, 'covers the designs: ' + hex.w + 'x' + hex.h);
         const strips = FakeClient.all[2], stripRefs = Array.from(strips.layers.keys());
         assert.strictEqual(stripRefs.length, 3, 'the bottom strips, on their own connection');
-        await wait(450);
+        await wait(650);
         assert.strictEqual(d.activeName, 'eva', 'swapped under the hexagons');
         assert.strictEqual(cover()[1].uniforms.u_t[0], 1, 'fully covered while it swaps');
         const l = label();
-        assert.ok(l && l.w === 720 && l.h === 132 && l.format === 'rgba8', 'the mode label, an asset');
+        assert.ok(l && l.w === 720 && l.h === 132 && l.format === 'r8', 'the mode label, an r8 asset');
         const hx = cover()[1];
         assert.strictEqual(hx.binds.u_label, Array.from(c.layers.entries()).find(([, x]) => x === l)[0], 'drawn by the hexagons');
         assert.deepStrictEqual(hx.uniforms.u_labelOn, [1], 'shown while covered');
         const lr = hx.uniforms.u_labelRect;
         assert.ok(Math.abs(lr[0] + lr[2] / 2 - hex.w / 2) <= 1 && Math.abs(lr[1] + lr[3] / 2 - hex.h / 2) <= 1, 'label centred: ' + lr);
         d.widgets.forEach((x) => c.emit('layer', x.ref, 'shown'));     // the new design is drawn
-        await wait(400);
+        await wait(450);
         assert.ok(cover() && cover()[1].uniforms.u_t[0] > 1, 'sweeping out: ' + (cover() && cover()[1].uniforms.u_t));
         assert.deepStrictEqual(cover()[1].uniforms.u_labelOn, [0], 'the label goes before the sweep out');
         await wait(500);
@@ -1909,26 +1909,79 @@ const tests = {
         assert.strictEqual(strips.layers.size, 0, 'dropped on stop');
     },
     async 'the label names the mode, in Barlow and in Matisse'() {
-        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3', dashSport: 'whole', dashEco: 'e3' });
+        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3', dashSport: 'whole', dashEco: 'e3', dashTransitionStyle: 'sweep' });
         await wait(SETTLE_MS);
         const c = a.dash();
         let most = 0;
         const add = c._add.bind(c);
         c._add = (k, o) => { const r = add(k, o); most = Math.max(most, Array.from(c.layers.values()).filter((x) => x.kind !== 'asset').length); return r; };
-        drive(a, 'ECO PRO');      // C3 -> E3: seven layers each, the change adds one
-        await wait(600);
+        drive(a, 'ECO PRO');      // C3 -> E3: six layers each on this connection, the change adds one
+        await wait(800);
         assert.ok(most <= 8, most + ' layers');
         assert.deepStrictEqual(c.refused, []);
         const [ref, l] = Array.from(c.layers.entries()).find(([, x]) => x.kind === 'asset');
-        const px = imageOf(c, ref);
-        let orange = 0, white = 0;
-        for (let i = 0; i < px.length; i += 4) {
-            if (px[i] > 240 && px[i + 1] > 120 && px[i + 1] < 150 && px[i + 2] < 20) orange++;
-            if (px[i] > 240 && px[i + 1] > 240 && px[i + 2] > 240) white++;
+        const px = c.sent.filter((x) => x.ref === ref).pop().px;
+        assert.strictEqual(px.length, l.w * l.h, 'one byte a pixel');
+        const split = Math.round(l.h * 0.42);
+        let top = 0, bottom = 0;
+        for (let i = 0; i < px.length; i++) if (px[i] > 128) { if (i / l.w < split) top++; else bottom++; }
+        assert.ok(top > 2000, 'DRIVE MODE >> ECO PRO above the split: ' + top);
+        assert.ok(bottom > 500, '活動限界 below it: ' + bottom);
+        const u = c.uniformsOf((x) => x.kind === 'effect' && x.klass === 'alert');
+        assert.deepStrictEqual(u.u_c1, [1, 136 / 255, 0], 'orange above');
+        assert.deepStrictEqual(u.u_c2, [1, 1, 1], 'white below');
+    },
+    async 'every animation style covers, swaps, shows its label and uncovers, within the limits'() {
+        const want = { sweep: [0, 720, 132], atfield: [1, 1000, 200], blue: [2, 1100, 150], title: [3, 1200, 300] };
+        for (const style of Object.keys(want)) {
+            const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3', dashSport: 'whole', dashEco: 'e3', dashTransitionStyle: style });
+            await wait(SETTLE_MS);
+            const d = counts.evas.find((e) => e.primary), c = a.dash();
+            let most = 0;
+            const add = c._add.bind(c);
+            c._add = (k, o) => { const r = add(k, o); most = Math.max(most, Array.from(c.layers.values()).filter((x) => x.kind !== 'asset').length); return r; };
+            const cover = () => Array.from(c.layers.values()).find((l) => l.kind === 'effect' && l.klass === 'alert');
+            drive(a, 'SPORT');
+            await wait(150);
+            assert.ok(cover(), style + ': covering');
+            assert.deepStrictEqual(cover().uniforms.u_style, [want[style][0]], style);
+            const label = Array.from(c.layers.values()).find((l) => l.kind === 'asset');
+            assert.ok(label && label.format === 'r8' && label.w === want[style][1] && label.h === want[style][2], style + ': label ' + (label && label.w + 'x' + label.h));
+            const lr = cover().uniforms.u_labelRect;
+            assert.ok(lr[0] >= 0 && lr[1] >= 0 && lr[0] + lr[2] <= cover().w && lr[1] + lr[3] <= cover().h, style + ': label inside the layer ' + lr);
+            const ink = c.sent.filter((x) => x.ref === Array.from(c.layers.entries()).find(([, l]) => l === label)[0]).pop().px.reduce((n, v) => n + (v > 128), 0);
+            assert.ok(ink > 3000, style + ': the name is drawn (' + ink + ')');
+            await wait(900);
+            assert.strictEqual(d.activeName, 'eva', style + ': swapped');
+            assert.ok(cover().uniforms.u_labelOn[0] > 0.8, style + ': the name shows while covered');
+            d.widgets.forEach((x) => c.emit('layer', x.ref, 'shown'));
+            await wait(1600);
+            assert.ok(!cover(), style + ': uncovered and gone');
+            assert.ok(!Array.from(c.layers.values()).some((l) => l.kind === 'asset'), style + ': label gone');
+            assert.ok(most <= 8, style + ': ' + most + ' layers');
+            assert.deepStrictEqual(FakeClient.all.flatMap((x) => x.refused), [], style);
+            counts.evas.forEach((e) => e.stop && e.stop());
         }
-        assert.ok(orange > 2000, 'orange DRIVE MODE >> ECO PRO: ' + orange);
-        assert.ok(white > 500, 'white 活動限界: ' + white);
-        assert.strictEqual(l.w * l.h * 4, px.length);
+    },
+    async 'Random never picks the same style twice running, and an old Off setting stays off'() {
+        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3', dashSport: 'whole', dashTransitionStyle: 'random' });
+        await wait(SETTLE_MS);
+        const c = a.dash(), styles = [];
+        for (let i = 0; i < 5; i++) {
+            drive(a, i % 2 ? 'COMFORT' : 'SPORT');
+            await wait(100);
+            const cv = Array.from(c.layers.values()).find((l) => l.kind === 'effect' && l.klass === 'alert');
+            styles.push(cv && cv.uniforms.u_style[0]);
+            const d = counts.evas.find((e) => e.primary);
+            for (let n = 0; n < 40 && d.transition; n++) { d.widgets.forEach((x) => c.emit('layer', x.ref, 'shown')); await wait(100); }
+            assert.ok(!d.transition, 'finished');
+        }
+        assert.ok(styles.every((v) => v >= 0 && v <= 3), 'styles ' + styles);
+        assert.ok(styles.every((v, i) => !i || v !== styles[i - 1]), 'never twice running: ' + styles);
+        counts.evas.forEach((e) => e.stop && e.stop());
+        const b = startApp({ screens: 'dash', demo: 'off', dashTransition: false });
+        await wait(SETTLE_MS);
+        assert.strictEqual(b.hu.settings.get('dashTransitionStyle'), 'off', 'migrated');
     },
     async 'with the animation off, or a centre design, the design swaps at once'() {
         for (const values of [{ dashComfort: 'c3', dashSport: 'whole', dashTransition: false }, { dashComfort: 'a', dashSport: 'b' }, { dashComfort: 'c3', dashSport: 'a' }]) {
@@ -1946,9 +1999,11 @@ const tests = {
         const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3' });
         await wait(SETTLE_MS);
         const c = a.dash(), refs = Array.from(c.layers.keys()).join(',');
-        a.set('dashTransition', false);
-        await wait(150);
-        assert.strictEqual(Array.from(c.layers.keys()).join(','), refs);
+        for (const v of ['off', 'blue', 'random', 'atfield']) {
+            a.set('dashTransitionStyle', v);
+            await wait(150);
+            assert.strictEqual(Array.from(c.layers.keys()).join(','), refs, v);
+        }
     },
     async 'a dash that cannot start leaves the HUD running and says so'() {
         const a = startApp({ screens: 'both' }, { dashThrows: true });
