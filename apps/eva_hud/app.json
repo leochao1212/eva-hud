@@ -2,9 +2,9 @@
   "id": "eva_hud",
   "title": "EVA",
   "description": "NERV battle display on the windshield HUD and the instrument cluster: giant gear, rev bar, speed and full-screen title-card alerts",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "vendor": "custom",
-  "hmiOverrides": {"ID8": {"settings": {"centre": {"default": "on", "reset": 1}, "hudComfort": {"default": "comfort", "reset": 2}, "hudSport": {"default": "sport", "reset": 2}, "hudEco": {"default": "eco", "reset": 2}, "dashComfort": {"default": "sqc", "reset": 1}, "dashSport": {"default": "sqs", "reset": 1}, "dashEco": {"default": "sqe", "reset": 1}, "bothDashComfort": {"default": "sqc", "reset": 1}, "bothDashSport": {"default": "sqs", "reset": 1}, "bothDashEco": {"default": "sqe", "reset": 1}}}},
+  "hmiOverrides": {"ID7": {"settings": {"centre": {"showWhen": [{"screens": "_never"}]}}}, "ID8": {"screens": [{"name": "MAIN", "kind": "menu", "title": "EVA", "settings": true, "items": [["text", "STATUS", "Starting the HUD"]]}], "settings": {"centre": {"default": "on", "reset": 1}, "hudComfort": {"default": "comfort", "reset": 2}, "hudSport": {"default": "sport", "reset": 2}, "hudEco": {"default": "eco", "reset": 2}, "dashComfort": {"default": "sqc", "reset": 1}, "dashSport": {"default": "sqs", "reset": 1}, "dashEco": {"default": "sqe", "reset": 1}, "bothDashComfort": {"default": "sqc", "reset": 1}, "bothDashSport": {"default": "sqs", "reset": 1}, "bothDashEco": {"default": "sqe", "reset": 1}}}},
   "loggingId": "OAEV",
   "iconGlyph": "EVA",
   "credits": {
@@ -32,7 +32,8 @@
     "eva_magi.js",
     "eva_demo.js",
     "eva_dash.js",
-    "eva_centre.js"
+    "eva_centre.js",
+    "eva_page.js"
   ],
   "signals": {
     "de.bmw.infotainment.vehicle.CDS": {
@@ -74,16 +75,9 @@
   "screens": [
     {
       "name": "MAIN",
-      "kind": "menu",
+      "kind": "canvas",
       "title": "EVA",
-      "settings": true,
-      "items": [
-        [
-          "text",
-          "STATUS",
-          "Starting the HUD"
-        ]
-      ]
+      "buttons": [["BTN_SETTINGS", "All settings"]]
     }
   ],
   "settings": [

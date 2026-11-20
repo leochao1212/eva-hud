@@ -4,6 +4,8 @@ EVA HUD - third-party notices
 The app's own code is MIT, Copyright (c) 2026 DukeAPenguin (LICENSE in the repository). Besides its own code, it uses:
 
 1. The HUD Widgets engine of https://github.com/bimmer-lab/apps (shared/, bench/, MIT, Copyright (c) 2026 bimmer-lab).
+   The centre-screen page (shared/eva_page.js) follows that repository's settings page (shared/page.js) on the kit's
+   canvas screen, and kit/runtime/renderd.js is its copy (pixel images on mgu-render/1, ab81cee).
 
 2. cauliflowermossgrape's MGU App Kit (kit/, MIT). https://github.com/cauliflowermossgrape/idrive7-apps
    The engine unit identifiers and scaling in app.json come from that repository's car_vitals and Live Data apps.

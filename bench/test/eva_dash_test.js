@@ -79,8 +79,10 @@ Module._load = function (req) {
 };
 
 /** The app as the car runs it, on a fresh data folder. */
+let lastHu = null;
 function startApp(values, opts) {
     FakeClient.all.forEach((c) => { c.ready = false; });     // the last test's app stops drawing, so it can't slow this one
+    if (lastHu) lastHu.ui.home();                            // and its centre-screen page (a canvas loop) closes
     FakeClient.all.length = 0;
     counts.cars = 0;
     counts.evas = [];
@@ -110,6 +112,7 @@ function startApp(values, opts) {
     const text = hu.ui.text;
     hu.ui.text = (n, t, row, cell) => { if (n === 'STATUS' && !row) status = String(t); return text(n, t, row, cell); };
     hu.start();
+    lastHu = hu;
     return { hu, lines, watches, status: () => status, hud: () => FakeClient.all[0], dash: () => FakeClient.all[1], set: (k, v) => { const many = /^(dashDesign|bothDash)$/.test(k) ? ['Comfort', 'Sport', 'Eco'].map((m) => (k === 'dashDesign' ? 'dash' : 'bothDash') + m) : [k]; many.forEach((n) => hu.settings.set(n, v)); } };
 }
 
@@ -154,7 +157,7 @@ async function everyday(mode, settings) {
 const tests = {
     async 'one app opens one connection per screen, each drawing on its own'() {
         const a = startApp({ screens: 'both' });
-        await wait(150);
+        await wait(500);         // the first app of the run also bakes the centre page's first frame (fonts, EVA-01)
         assert.strictEqual(FakeClient.all.length, 3, 'the HUD, the dash, and the dash\'s bottom strips');
         assert.strictEqual(new Set(FakeClient.all.map((c) => c.name)).size, 3);
         assert.deepStrictEqual(FakeClient.all[2].targets(), ['panel']);
@@ -2004,6 +2007,36 @@ const tests = {
             await wait(150);
             assert.strictEqual(Array.from(c.layers.keys()).join(','), refs, v);
         }
+    },
+    async 'the centre page: the cockpit, then the settings tab, whose rows open their choices and set them'() {
+        const a = startApp({ screens: 'dash', demo: 'on' });
+        let rec = null, png = null;
+        const present = a.hu.display.present.bind(a.hu.display);
+        a.hu.display.present = (name, cv, soft) => { rec = cv; return present(name, cv, soft); };
+        await wait(SETTLE_MS + 400);
+        const keys = () => ((rec && rec.targets) || []).map((t) => t.key);
+        const tap = (k) => { const t = rec.targets.find((x) => x.key === k); assert.ok(t, 'no target ' + k + ': ' + keys().join(' ')); t.run(); };
+        assert.ok(rec, 'the page drew');
+        assert.strictEqual(a.hu.spec.screens[0].kind, 'canvas');
+        assert.ok(!keys().some((k) => /^row:/.test(k)), 'the cockpit first');
+        a.hu.display.onTab(1);
+        await wait(300);
+        assert.ok(keys().indexOf('row:dashTransitionStyle') >= 0 && keys().indexOf('row:dashComfort') >= 0 && keys().indexOf('toggle:alertsOn') >= 0, keys().join(' '));
+        assert.ok(keys().indexOf('row:hudComfort') < 0, 'only the rows the Mode uses');
+        tap('row:dashTransitionStyle');
+        await wait(250);
+        tap('pick:dashTransitionStyle:title');
+        await wait(250);
+        assert.strictEqual(a.hu.settings.get('dashTransitionStyle'), 'title');
+        assert.ok(!keys().some((k) => /^pick:/.test(k)), 'the list closes');
+        const was = a.hu.settings.get('alertsOn');
+        tap('toggle:alertsOn');
+        await wait(150);
+        assert.strictEqual(a.hu.settings.get('alertsOn'), !was);
+        a.hu.display.onTab(0);
+        await wait(250);
+        assert.ok(!keys().some((k) => /^row:/.test(k)), 'back on the cockpit');
+        assert.deepStrictEqual(a.lines.filter((l) => /^ERROR/.test(l)).map((l) => l.slice(0, 160)), []);
     },
     async 'a dash that cannot start leaves the HUD running and says so'() {
         const a = startApp({ screens: 'both' }, { dashThrows: true });

@@ -1224,5 +1224,22 @@
  "OVERHEAT: coolant at": "過熱：水溫於",
  "OVERBOOST: boost at": "過增壓：增壓於",
  "Time": "時間",
- "Starting the HUD": "正在啟動 HUD"
+ "Starting the HUD": "正在啟動 HUD",
+ "All settings": "全部設定",
+ "Mode change animation": "換模式動畫",
+ "AT field": "AT 力場",
+ "Pattern Blue": "Pattern Blue 警報",
+ "Title card": "標題卡",
+ "Hexagon sweep": "六角形掃描",
+ "Random": "隨機",
+ "Shadow cluster": "Shadow 儀表",
+ "Comfort photo": "舒適模式照片",
+ "Sport photo": "運動模式照片",
+ "Eco Pro photo": "節能模式照片",
+ "Photo change animation": "換照片動畫",
+ "Wave": "浪潮",
+ "Flag stripes": "旗幟斜紋",
+ "Light sweep": "光掃",
+ "Fade": "淡入",
+ "中控駕駛艙 Centre cockpit": "中控駕駛艙"
 }

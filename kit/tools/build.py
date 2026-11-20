@@ -431,8 +431,8 @@ def build_start_widget(spec, app_id, icon_src, out, pkg_out=None):
 
 
 def apply_hmi_overrides(spec):
-    """app.json "hmiOverrides": {"ID8": {"settings": {"<key>": {"default": ..., "reset": n}}}} patches the settings of
-    a build for that HMI (MGU_HMI), so one source can default differently per car. With "reset" the kit moves a car's
+    """app.json "hmiOverrides": {"ID8": {"settings": {"<key>": {"default": ..., "reset": n}}, "screens": [...]}} patches the
+    settings of a build for that HMI (MGU_HMI), and can replace its screens, so one source can default differently per car. With "reset" the kit moves a car's
     saved value to the new default once (kit/runtime/mgu.js Settings)."""
     hmis = os.environ['MGU_HMI'].split(',') if os.environ.get('MGU_HMI') else spec.get('mguHmi', ['ID7'])
     for hmi in hmis:
@@ -441,6 +441,9 @@ def apply_hmi_overrides(spec):
             if item is None:
                 raise SystemExit('hmiOverrides.%s: no setting "%s"' % (hmi, key))
             item.update(patch)
+        screens = spec.get('hmiOverrides', {}).get(hmi, {}).get('screens')
+        if screens is not None:
+            spec['screens'] = screens
     spec.pop('hmiOverrides', None)
 
 
