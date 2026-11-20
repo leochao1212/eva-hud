@@ -76,7 +76,8 @@ function layoutTests() {
             const live = canvas.parts.filter((p) => p.text && READINGS[mode].indexOf(p.text) >= 0);
             assert.deepStrictEqual(live.map((p) => p.text), READINGS[mode]);
             assert.strictEqual(canvas.parts.filter((p) => /^s\d$/.test(p.id)).length, 0, 'the 0-8 ticks are gone');
-            const boxes = layout.widgets.filter((w) => w.id !== 'bg' && w.id.indexOf('strip_') !== 0).map((w) => [w.x, w.y, w.w, w.h]);
+            // the strips and the info row on them (tools/botinfo.py) are under the photo (y 640 on), not on its art
+            const boxes = layout.widgets.filter((w) => w.id !== 'bg' && !/^(strip_|botinfo)/.test(w.id)).map((w) => [w.x, w.y, w.w, w.h]);
             canvas.parts.forEach((p) => boxes.push([canvas.x + p.x, canvas.y + p.y, p.w, p.h]));
             boxes.forEach((b) => {
                 assert.ok(b[0] >= SAFE_X[mode], mode + ' covers the art at x ' + b[0]);
@@ -127,7 +128,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.5.1');
+        assert.strictEqual(shadow.version, '1.6.0');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);
@@ -231,7 +232,7 @@ function runtimeTests() {
                 const sent = client.sent.filter((s) => s.ref === ref);
                 assert.ok(sent.length === 1 && !sent[0].rects && sent[0].px.length === ETC2_BYTES, 'each photo goes up once, whole');
             });
-            assert.strictEqual(client.layers.size, 9);
+            assert.strictEqual(client.layers.size, 10);     // + the bottom info row
             assert.ok(!Array.from(client.layers.values()).some((l) => l.kind === 'image' && l.iw === 1920 && l.ih === 640), 'no rgba photo');
             assert.strictEqual(client.photos().length, 1, 'one photo layer');
             const [, photo] = client.photos()[0];

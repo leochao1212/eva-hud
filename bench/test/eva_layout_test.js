@@ -63,12 +63,13 @@ const inShape = (r) => {
 const dashB = () => load('layouts/dash_b.json');
 const dashD = () => load('layouts/dash_d.json');
 // C2 (Title card) was never generated (tools/eva_layout.py skipped it: the title font did not fit) and is not offered
-// The whole designs' black bottom strips (botcover_*): drawn on a connection of their own (eva_dash.js), over BMW's
-// status row on purpose, around its gear letter (eva_dash_test.js checks that). Not the dash's own layers.
 // The title type: Matisse where its commercial file was there to bake from, else the free stand-ins this repository builds
 // with (tools/fonts-src: Shippori Mincho as Matisse, Eva-Ming; c8a83ba).
 const TITLE_TYPE = /^(MatissePro-EB\.otf|MatisseSub-ShipporiMinchoB1-EB\.ttf|EvaMing-SC\.otf)$/;
-const own = (l) => l.widgets.filter((w) => !/^botcover/.test(w.id));
+// The whole designs' black bottom strips (botcover_*: drawn on a connection of their own, eva_dash.js) and the info row
+// over them (botinfo, tools/botinfo.py: an evacanvas, so dropped for an alert like the gear): over BMW's status row on
+// purpose, clear of its gear letter. Left out of the rules for the design itself; the info row has its own test.
+const own = (l) => l.widgets.filter((w) => !/^bot(cover|info)/.test(w.id));
 const CENTRE = ['a', 'b', 'c1', 'e1', 'e2'].map((n) => [n, () => load('layouts/dash_' + n + '.json')]);
 const ALL_NEW = CENTRE.concat(['c3', 'e3'].map((n) => [n, () => load('layouts/dash_' + n + '.json')]));
 const MOTTOS = { heaven: ['神ハ天ニ在リ', '世ハ全テ事モ無シ'], project: ['人類補完計画', '第3段階 進行中'], angel: ['使徒反応無シ', 'パターン青 未検出'],
@@ -829,6 +830,20 @@ const tests = {
         const parts = canvasOf(dashB()).parts.filter((p) => p.type === 'lamp');
         assert.deepStrictEqual(parts.map((p) => p.when), ['always', 'eco', 'comfort', 'sport']);
         assert.deepStrictEqual(parts.map((p) => p.top), ['{{b:power}}', 'SLOW', 'NORMAL', 'RACING']);
+    },
+    'the bottom info row is on every whole design and Shadow photo, over the black strips, clear of the gear letter'() {
+        const files = ['dash_eva', 'dash_d', 'dash_c3', 'dash_e3'].map((n) => path.join(HUD, 'layouts', n + '.json'))
+            .concat(['sport', 'comfort', 'eco'].map((m) => path.join(HUD, '..', '..', 'shadow_dash', 'hud', 'layouts', 'dash_shadow_' + m + '.json')));
+        files.forEach((f) => {
+            const d = JSON.parse(fs.readFileSync(f, 'utf8')), row = d.widgets.find((w) => w.id === 'botinfo'), name = path.basename(f);
+            assert.ok(row, name + ': no info row');
+            const strips = d.widgets.filter((w) => /^(botcover|strip_)/.test(w.id));
+            assert.ok(strips.length && strips.every((w) => row.z > w.z), name + ': under the strips');
+            assert.ok(row.x + row.w <= 1380 && row.y >= 660 && row.y + row.h <= 720, name + ': meets the gear letter or leaves the row');
+            row.parts.filter((p) => p.type === 'text').forEach((p) => assert.ok(fs.existsSync(path.join(HUD, 'fonts', p.font + '.json')), name + ' ' + p.font));
+            // the dash's own connection with it and a drive-mode change's hexagons (the strips are on another)
+            if (/^dash_(eva|d|c3|e3)/.test(name)) assert.ok(own(d).length + 1 + 1 <= 8, name + ': ' + (own(d).length + 2) + ' layers');
+        });
     },
     'design D stays within the 8 layers with an alert, on the cluster and clear of BMW\'s bottom row'() {
         const d = dashD();

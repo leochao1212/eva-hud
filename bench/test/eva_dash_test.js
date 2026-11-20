@@ -190,13 +190,13 @@ const tests = {
         const a = startApp({ screens: 'dash' });
         await wait(150);
         assert.strictEqual(a.hud().layers.size, 0);
-        assert.strictEqual(a.dash().layers.size, 5);
+        assert.strictEqual(a.dash().layers.size, 6);
     },
     async 'HUD + Dash draws both, the HUD without the instruments'() {
         const a = startApp({ screens: 'both' });
         await wait(150);
         assert.strictEqual(a.hud().layers.size, 4);
-        assert.strictEqual(a.dash().layers.size, 5);
+        assert.strictEqual(a.dash().layers.size, 6);
     },
     async 'off draws nothing'() {
         const a = startApp({ screens: 'off' });
@@ -214,7 +214,7 @@ const tests = {
         a.set('screens', 'dash');
         await wait(100);
         assert.strictEqual(a.hud().layers.size, 0);
-        assert.strictEqual(a.dash().layers.size, 5);
+        assert.strictEqual(a.dash().layers.size, 6);
     },
     async 'going from Dash only to both leaves the dash\'s layers alone'() {
         const a = startApp({ screens: 'dash' });
@@ -969,8 +969,8 @@ const tests = {
         await wait(200);
         assert.strictEqual(a.hud().alertLayers().length, 0);
         assert.strictEqual(a.dash().alertLayers().length, 0);
-        assert.strictEqual(a.dash().shown().length, 5);
-        assert.strictEqual(a.dash().layers.size, 5, 'the alert\'s layers should be gone, their memory free');
+        assert.strictEqual(a.dash().shown().length, 6);
+        assert.strictEqual(a.dash().layers.size, 6, 'the alert\'s layers should be gone, their memory free');
         assert.strictEqual(a.hud().shown().length, 4);
         assert.deepStrictEqual(a.dash().refused, []);
     },
@@ -990,7 +990,7 @@ const tests = {
         a.set('alertPreview', 'off');
         await wait(200);
         assert.deepStrictEqual(a.dash().refused, []);
-        assert.strictEqual(a.dash().shown().length, 5);
+        assert.strictEqual(a.dash().shown().length, 6);
     },
     async 'both screens read one set of car data'() {
         const a = startApp({ screens: 'both' });
@@ -1009,7 +1009,7 @@ const tests = {
         popup('322', true);
         await wait(250);
         assert.strictEqual(a.hud().shown().length, 0);
-        assert.strictEqual(a.dash().shown().length, 5);
+        assert.strictEqual(a.dash().shown().length, 6);
     },
     async 'the HUD comes back only some time after the pop-up goes'() {
         const a = startApp({ screens: 'both' });
@@ -1346,7 +1346,7 @@ const tests = {
     async 'every design can be picked in the menu in any order, with nothing refused or left behind'() {
         const a = startApp({ screens: 'dash' });
         await wait(SETTLE_MS);
-        for (const [design, target, n] of [['a', 'map', 5], ['b', 'map', 3], ['d', 'panel', 5], ['whole', 'panel', 5], ['c1', 'map', 4], ['c3', 'panel', 6], ['e1', 'map', 4], ['e2', 'map', 4], ['e3', 'panel', 6], ['b', 'map', 3], ['e2', 'map', 4], ['d', 'panel', 5]]) {
+        for (const [design, target, n] of [['a', 'map', 5], ['b', 'map', 3], ['d', 'panel', 6], ['whole', 'panel', 6], ['c1', 'map', 4], ['c3', 'panel', 7], ['e1', 'map', 4], ['e2', 'map', 4], ['e3', 'panel', 7], ['b', 'map', 3], ['e2', 'map', 4], ['d', 'panel', 6]]) {      // the whole designs: + the bottom info row
             a.set('dashDesign', design);
             await wait(200);
             assert.deepStrictEqual(a.dash().drawnTargets(), [target], design);
@@ -1470,7 +1470,7 @@ const tests = {
         a.set('alertPreview', 'off');
         await wait(300);
         assert.strictEqual(a.dash().alertLayers().length, 0);
-        assert.strictEqual(a.dash().shown().length, 5);
+        assert.strictEqual(a.dash().shown().length, 6);
         assert.deepStrictEqual(a.dash().refused, []);
     },
     async 'design D gives way to a BMW pop-up, as the whole cluster has to'() {
@@ -2172,6 +2172,47 @@ const tests = {
         }));
         if (!has('grid')) missing.push('screens=grid');
         assert.deepStrictEqual(missing, [], 'picked on the car, these would draw nothing');
+    },
+    async "the car's low-fuel warning: the info row turns yellow at once, the notice waits for the car to stand, once"() {
+        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3' });
+        await wait(SETTLE_MS);
+        const d = counts.evas.find((e) => e.primary), c = a.dash();
+        const tank = (spare, litres) => a.hu.feed('de.bmw.infotainment.KombiIF', 'statusRangeTankStatus', { range: 38, fluidLevelFuelTank: litres, statusFluidLevelFuelTankSpare: spare });
+        const speed = (kmh) => a.hu.feed('de.bmw.infotainment.vehicle.Vehicle2', 'statusCarSpeed2', { speedVehicleCentreOfGravity: Math.round(kmh / 0.015625) });
+        const cover = () => Array.from(c.layers.values()).find((l) => l.kind === 'effect' && l.klass === 'alert');
+        const row = d.widgets.get('botinfo');
+        assert.ok(row && row.w.y >= 660 && row.w.x + row.w.w <= 1380, 'the info row, clear of the gear letter');
+        speed(80);
+        tank('NICHT_AKTIV', 30);
+        await wait(300);
+        assert.strictEqual(d._token('fuel:warn'), '');
+        assert.strictEqual(d._fuel().litres, 30);
+        tank('AKTIV', 7);
+        await wait(300);
+        assert.strictEqual(d._token('fuel:warn'), '燃料残量警告', 'the row says it');
+        assert.ok(d._warn('fuel'));
+        assert.ok(!cover(), 'no notice while driving');
+        speed(0);
+        await wait(300);
+        assert.ok(cover(), 'the notice once the car stands');
+        assert.deepStrictEqual(cover().uniforms.u_style, [2], 'the hazard-tape band');
+        const label = Array.from(c.layers.entries()).find(([, l]) => l.kind === 'asset');
+        const ink = c.sent.filter((x) => x.ref === label[0]).pop().px.reduce((n, v) => n + (v > 128), 0);
+        assert.ok(ink > 3000, 'FUEL // 燃料残量警告 drawn: ' + ink);
+        assert.strictEqual(d.activeName, 'c3', 'the design stays');
+        d.widgets.forEach((x) => c.emit('layer', x.ref, 'shown'));
+        for (let n = 0; n < 60 && d.transition; n++) await wait(100);
+        assert.ok(!d.transition, 'gone after its hold');
+        speed(0.5);
+        await wait(400);
+        assert.ok(!cover(), 'once per warning');
+        tank('NICHT_AKTIV', 40);          // a refill
+        await wait(200);
+        tank('AKTIV', 7);
+        await wait(400);
+        assert.ok(cover(), 'again after a refill');
+        a.set('fuelNotice', false);
+        assert.deepStrictEqual(c.refused, []);
     },
     async 'a dash that cannot start leaves the HUD running and says so'() {
         const a = startApp({ screens: 'both' }, { dashThrows: true });

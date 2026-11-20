@@ -63,7 +63,7 @@ const ALERTS = {
     afr: { en: 'AFR ANOMALY', jp: '空燃比異常', rgb: [118, 255, 3], label: '空燃比  AFR', status: 'AFR DEVIATION // 混合気異常', preview: 18.8 },
     multi: { en: 'MULTIPLE ALERTS', jp: '多重警報発令', rgb: [255, 0, 51], label: '同時発生', status: '', preview: 3 },
 };
-const LIVE_SETTINGS = ['dashTransitionStyle', 'demo', 'gmtOffset', 'motto', 'dashCenter', 'alertsOn', 'dismissAlert', 'alertPreview', 'limitKnock', 'limitFuel', 'limitAfrLow', 'limitAfrHigh', 'limitHeat', 'limitBoost'];
+const LIVE_SETTINGS = ['dashTransitionStyle', 'fuelNotice', 'demo', 'gmtOffset', 'motto', 'dashCenter', 'alertsOn', 'dismissAlert', 'alertPreview', 'limitKnock', 'limitFuel', 'limitAfrLow', 'limitAfrHigh', 'limitHeat', 'limitBoost'];
 const POPUP_SLOT_HUD = 0x322;
 // the settings that choose what shows: a change redraws only if it changes that
 const LAYOUT_SETTINGS = /^(screens|(hud|dash|bothHud|bothDash)(Comfort|Sport|Eco))$/;
@@ -117,6 +117,12 @@ const DEMO_RANGE = 412;
 // nothing new for minutes, and the range doesn't change by the second.
 const KOMBI = 'de.bmw.infotainment.KombiIF';
 const READ_MS = 10000, READ_FRESH_MS = 60000;
+// the bottom info row (in place of BMW's own, which the whole designs cover): fuel, the car's own reserve warning,
+// the outside temperature. Litres: 255 = none; outside: raw * 0.5 - 40 C, 255 = none (car_vitals, MIT).
+const ENV = 'de.bmw.infrastructure.EnvironmentalInformation';
+const FUEL_NONE = 255, AMBIENT_NONE = 255, ICE_C = 3;
+const TANK_LITRES = 52;          // Z4 G29 (config.tankLitres for another car)
+const DEMO_FUEL = 31, DEMO_AMBIENT = 18;
 const BURN_MIN_KMH = 5;                 // slower, L/100km says nothing
 const BURN_MAX = 99.9;
 const BURN_FRESH_MS = 5000;
@@ -297,12 +303,42 @@ class EvaHud extends HudApp {
         Promise.resolve()
             .then(() => this.ctx.signals.watch(KOMBI, '1', { statusRangeTankStatus: (v) => this._onRange(v) }, this.log, { pollMs: READ_MS }))
             .catch((e) => this.log.info('KombiIF not read: ' + (e && e.message || e)));
+        Promise.resolve()
+            .then(() => this.ctx.signals.watch(ENV, '1', { ExteriorTemperature: (v) => this._onAmbient(v) }, this.log, { pollMs: READ_MS }))
+            .catch((e) => this.log.info('outside temperature not read: ' + (e && e.message || e)));
     }
 
     _onRange(v) {
-        const r = v && v.range;
+        const r = v && v.range, f = v && v.fluidLevelFuelTank, spare = v && v.statusFluidLevelFuelTankSpare;
         this.rangeNow = isNum(r) && r >= 0 && r < RANGE_NONE ? r : null;
+        this.fuelNow = isNum(f) && f >= 0 && f < FUEL_NONE ? f : null;
+        // the car's own low-fuel warning (KOMBI's reserve lamp): AKTIV / NICHT_AKTIV, as a name or its number
+        this.reserveNow = spare === 'AKTIV' || spare === 1 ? true : spare === 'NICHT_AKTIV' || spare === 0 ? false : null;
         this.rangeAt = Date.now();
+    }
+
+    _onAmbient(v) {
+        const t = v && v.temperatureExterior;
+        this.ambientNow = isNum(t) && t !== AMBIENT_NONE ? t * 0.5 - 40 : null;
+        this.ambientAt = Date.now();
+    }
+
+    /** Fuel: { litres, frac (of the tank), reserve (the car's warning; else under 50 km of range) }, or nulls. */
+    _fuel() {
+        // the demo shows the reserve warning for the last 10 s of each minute
+        if (this.car.data().demo) return { litres: DEMO_FUEL, frac: DEMO_FUEL / this._tankLitres(), reserve: Date.now() % 60000 >= 50000 };
+        const fresh = Date.now() - (this.rangeAt || 0) < READ_FRESH_MS;
+        const litres = fresh && isNum(this.fuelNow) ? this.fuelNow : null;
+        const range = this._range();
+        const reserve = fresh && this.reserveNow !== null && this.reserveNow !== undefined ? this.reserveNow : isNum(range) ? range < 50 : false;
+        return { litres, frac: isNum(litres) ? Math.min(1, litres / this._tankLitres()) : null, reserve };
+    }
+    _tankLitres() { return this.config.tankLitres || TANK_LITRES; }
+
+    /** The outside temperature, C. */
+    _ambient() {
+        if (this.car.data().demo) return DEMO_AMBIENT;
+        return isNum(this.ambientNow) && Date.now() - this.ambientAt < READ_FRESH_MS ? this.ambientNow : null;
     }
 
     /** The range in km. */
@@ -407,6 +443,8 @@ class EvaHud extends HudApp {
 
     /** A part's reason to go amber. */
     _warn(name) {
+        if (name === 'fuel') return !!this._fuel().reserve;
+        if (name === 'ice') { const t = this._ambient(); return isNum(t) && t <= ICE_C; }
         return name === 'reverse' && this._wordKey() === 'R';
     }
 
@@ -462,6 +500,10 @@ class EvaHud extends HudApp {
             case 'mm': return this._token('time').split(':')[1];
             case 'burn': { const b = this._burn(); return isNum(b) ? b.toFixed(1) : '--'; }
             case 'range': { const r = this._range(); return isNum(r) ? r.toFixed(0) : '--'; }
+            case 'fuel:warn': return this._warn('fuel') ? '燃料残量警告' : '';
+            case 'fuel:warnen': return this._warn('fuel') ? 'FUEL RESERVE' : '';
+            case 'env:temp': { const t = this._ambient(); return isNum(t) ? t.toFixed(0) : '--'; }
+            case 'env:ice': return this._warn('ice') ? '路面凍結注意' : '';
             case 'u:range': return 'KM';
             case 'gearcap': { const k = this._gearState().kind; return k === 'standby' ? 'STANDBY MODE' : k === 'reverse' ? 'REVERSE GEAR' : 'CURRENT GEAR'; }
             case 'gearcapjp': { const k = this._gearState().kind; return k === 'standby' ? '待命状態' : k === 'reverse' ? '後退操作' : '主変速器'; }
@@ -776,12 +818,13 @@ class EvaHud extends HudApp {
         }
         let role = p.color || 'fg';
         if (p.hotWhen && this._shift()[p.hotWhen]) role = 'hot';
-        if (p.warnWhen && this._warn(p.warnWhen)) role = 'amber';
+        if (p.warnWhen && this._warn(p.warnWhen)) role = p.warnColor || 'amber';      // warnColor: [r, g, b, a] where the theme's amber is its orange
         if (p.magiTone) role = (p.magiTone === 'soft' ? TONE_SOFT : TONE)[this._magi().tone];
         if (p.magiHot && this._magi()[p.magiHot] === 'no') role = 'no';
         const c = color(this.theme, role).join();
         if (p.type === 'rule') return c;
-        const hidden = (p.driving && this._wordKey()) || (p.parked && !this._wordKey());     // these give way to, or come with, the big word
+        if (p.type === 'fuelbar') { const f = this._fuel(); return c + '|' + (isNum(f.frac) ? Math.round(f.frac * (p.cells || 12)) : 'x') + '|' + (this._blinkOff(p, now) ? 0 : 1); }
+        const hidden = (p.driving && this._wordKey()) || (p.parked && !this._wordKey()) || this._blinkOff(p, now);     // these give way to, or come with, the big word
         return c + '|' + (hidden ? '' : this._resolve(p.text));
     }
 
@@ -793,6 +836,7 @@ class EvaHud extends HudApp {
         if (p.type === 'logo') return this._paintLogo(p, look.split(',').map(Number));
         const cut = look.indexOf('|');
         const c = (cut < 0 ? look : look.slice(0, cut)).split(',').map(Number);
+        if (p.type === 'fuelbar') return this._paintFuelBar(p, c, look.split('|'));
         if (p.type === 'rule') {
             const buf = Buffer.alloc(p.w * p.h * 4);
             for (let o = 0; o < buf.length; o += 4) { buf[o] = c[0]; buf[o + 1] = c[1]; buf[o + 2] = c[2]; buf[o + 3] = c[3]; }
@@ -802,6 +846,20 @@ class EvaHud extends HudApp {
         return textRaster.drawText(p.w, p.h, look.slice(cut + 1), {
             font: by ? by.font : p.font, color: c, align: p.align, spacing: p.spacing, glow: p.glow ? this.theme.glow : 0, x: p.textX, offsetY: by ? by.offsetY : p.offsetY,
         });
+    }
+
+    /** blinkWhen: off half of each 1.2 s while that warning (_warn) is on. */
+    _blinkOff(p, now) { return !!(p.blinkWhen && this._warn(p.blinkWhen) && Math.floor((now || Date.now()) / 600) % 2 === 1); }
+
+    /** The fuel as a row of cells: filled ones in the part's colour, the rest faint; none filled with no reading. */
+    _paintFuelBar(p, c, look) {
+        const W = p.w, H = p.h, n = p.cells || 12, gap = 3, cw = (W - gap * (n - 1)) / n, buf = Buffer.alloc(W * H * 4);
+        const filled = look[1] === 'x' ? 0 : Number(look[1]), lit = look[2] !== '0';
+        for (let i = 0; i < n; i++) {
+            const x0 = Math.round(i * (cw + gap)), x1 = Math.round(i * (cw + gap) + cw), a = i < filled && lit ? 255 : 46;
+            for (let y = 0; y < H; y++) for (let x = x0; x < x1; x++) { const o = (y * W + x) * 4; buf[o] = c[0]; buf[o + 1] = c[1]; buf[o + 2] = c[2]; buf[o + 3] = a; }
+        }
+        return buf;
     }
 
     /** A one-colour picture: hud/logos/<name>.json holds its alpha, at exactly the part's size. */

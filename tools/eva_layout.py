@@ -16,6 +16,8 @@ so these atlases stay on the owner's machine and car. Never publish this app's h
 import base64
 import json
 import os
+
+import botinfo
 import shutil
 import sys
 import tempfile
@@ -1645,6 +1647,7 @@ def main(x, y, w, h):
         if doc is not None:
             for sid, x, w, h in (('botcover_l', 0, gx, 84), ('botcover_c', gx, gw, gy - 636), ('botcover_r', gx + gw, 1920 - gx - gw, 84)):
                 doc['widgets'].append({'id': sid, 'type': 'fill', 'x': x, 'y': 636, 'w': w, 'h': h, 'color': 'black', 'class': 'overlay', 'z': 20, 'keepInAlert': True})
+            botinfo.add(doc)      # fuel, outside temperature, time over the strip: BMW's own row is under it (tools/botinfo.py)
     for f in os.listdir(fonts_dir):
         shutil.move(os.path.join(fonts_dir, f), os.path.join(APP, 'fonts', f))
     shutil.rmtree(fonts_dir)

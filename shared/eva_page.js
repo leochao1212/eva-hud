@@ -262,7 +262,8 @@ class EvaPage {
         cv.text(done ? '已隱藏' : '隱藏', bx + bw / 2, by + (h - 24) / 2 + 8, 22, done ? C.dim : '#000000', { align: 'center', literal: true });
         cv.target(L, top + pitch, colW, h, () => { this.dismissedAt = Date.now(); this.set('dismissAlert', true); setTimeout(() => this.kick(), 2600); }, 'button:dismissAlert', 12);
         this.pickRow(cv, L, top + 2 * pitch, colW, 'alertPreview', h);
-        cv.text('警示會在解除後自動恢復；預覽只在停車時顯示。', L + 4, top + 3 * pitch + 30, 20, C.dim, { literal: true });
+        if (this.item('fuelNotice')) this.toggleRow(cv, L, top + 3 * pitch, colW, 'fuelNotice', h);
+        cv.text('警示會在解除後自動恢復；預覽和低油量提示只在停車時顯示。', L + 4, top + 4 * pitch + 30, 20, C.dim, { literal: true });
         const rx = L + colW + gap;
         cv.text('警示門檻', rx + 4, top + 26, 22, C.orange, { literal: true });
         const rh = Math.min(62, Math.floor((bottom - top - 50) / LIMIT_KEYS.length) - 8);

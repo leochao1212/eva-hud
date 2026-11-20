@@ -50,11 +50,15 @@ EVA_FONTS = [
     ('e_ui', 'BarlowCondensed-SemiBold.ttf', 32, UPPER + DIGITS + ' :./-+%·'),
     # the dash's drive-mode change (shared/eva_dash.js TRANSITION_WORDS): the mode in Barlow, its name in Matisse
     ('tr_en', 'BarlowCondensed-Bold.ttf', 46, UPPER + ' >/:'),
-    ('tr_jp', 'MatisseSub-ShipporiMinchoB1-EB.ttf', 40, '第一種戦闘配置通常態勢活動限界壱弐参話 '),
+    ('tr_jp', 'MatisseSub-ShipporiMinchoB1-EB.ttf', 40, '第一種戦闘配置通常態勢活動限界壱弐参話燃料残量警告 '),
     ('tr_sub', 'BarlowCondensed-SemiBold.ttf', 18, UPPER + DIGITS + ' /%.:-'),
     # the AT field and the title card's big name, Pattern Blue's mode word
     ('tr_big', 'MatisseSub-ShipporiMinchoB1-EB.ttf', 120, '第一種戦闘配置通常態勢活動限界'),
     ('tr_hero', 'BarlowCondensed-Bold.ttf', 128, UPPER + ' '),
+    # the bottom info row (EVA and Shadow, over BMW's covered status row): labels, numbers, the warnings
+    ('bi_jp', 'MatisseSub-ShipporiMinchoB1-EB.ttf', 22, '燃料残量警告外気温路面凍結注意時刻航続距離 '),
+    ('bi_en', 'BarlowCondensed-SemiBold.ttf', 20, UPPER + DIGITS + ' /:.-°%'),
+    ('bi_num', 'BarlowCondensed-Bold.ttf', 40, DIGITS + ':.-°C '),
 ]
 FONTS = {'idrive_hud_widgets': HUD_FONTS, 'cluster_themes': CLUSTER_FONTS, 'eva_hud': EVA_FONTS}
 PAD = 2

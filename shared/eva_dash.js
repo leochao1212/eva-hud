@@ -50,6 +50,12 @@ const TRANSITION_STYLES = {
     title: { style: 3, inMs: 760, holdMinMs: 600, outMs: 460, label: { w: 1200, h: 300, x: 0.18 } },
 };
 const TRANSITION_RANDOM = ['sweep', 'atfield', 'blue', 'title'];
+/*
+ * The car's low-fuel warning, once per warning (again after a refill): Pattern Blue's hazard-tape band over the whole
+ * design with FUEL // 燃料残量警告, held NOTICE_HOLD_MS, only while the car stands (it covers the speed), else at the
+ * next stop. The bottom info row (tools/botinfo.py) shows the warning all along.
+ */
+const NOTICE = { words: ['FUEL', '燃料残量警告', '', 'LOW FUEL  //  REFUEL SOON'], holdMs: 3500, stillKmh: 3 };
 const TRANSITION_WORDS = { sport: ['SPORT', '第一種戦闘配置', '弐'], comfort: ['COMFORT', '通常態勢', '壱'], eco: ['ECO PRO', '活動限界', '参'] };
 const EVA_ORANGE = [255, 136, 0];
 const WHITE = [255, 255, 255];
@@ -105,6 +111,8 @@ class EvaDash extends EvaHud {
     _pedal() { return this.primary._pedal(); }
     _boost() { return this.primary._boost(); }
     _range() { return this.primary._range(); }
+    _fuel() { return this.primary._fuel(); }
+    _ambient() { return this.primary._ambient(); }
     _alertNow() { return this.primary.alertShow; }
 
     _isBigImage(w) { return w.type === 'evagear' || w.type === 'evacanvas' || w.type === 'evaphoto'; }
@@ -211,18 +219,31 @@ class EvaDash extends EvaHud {
                 else this._rebuild();
             } else this._status();
         }
+        this._guard('low fuel', () => this._lowFuel(now));
         if (this.transition) this._guard('transition', () => this._stepTransition(now));
         super._tick();
+    }
+
+    /** The low-fuel notice: armed when the car's warning comes on, shown at the first moment the car stands. */
+    _lowFuel(now) {
+        const reserve = !!this._fuel().reserve;
+        if (!reserve) { this.fuelNotice = null; return; }
+        if (!this.fuelNotice) this.fuelNotice = { shown: false };
+        if (this.fuelNotice.shown || this.transition || this.setting('fuelNotice') === false) return;
+        const speed = this.car && this.car.data().speed;
+        if (!(typeof speed === 'number' && speed < NOTICE.stillKmh) || !this._canTransition(true)) return;
+        this.fuelNotice.shown = true;
+        this._startTransition(now, true);
     }
 
     /* ---------------- the drive-mode change: hexagons in, new design, hexagons out ---------------- */
 
     /** Only between two whole-cluster designs on the panel, with nothing else on top. */
-    _canTransition() {
+    _canTransition(notice) {
         if (this.transition) return true;          // one under way picks up the newest design when it swaps
         const next = this._layoutName();
         const whole = (n) => n === 'eva' || WHOLE_DESIGNS.indexOf(n) >= 0;
-        return this.client.ready && this.setting('dashTransitionStyle') !== 'off' && this.target === 'panel' &&
+        return this.client.ready && (notice || this.setting('dashTransitionStyle') !== 'off') && this.target === 'panel' &&
             whole(this.activeName) && whole(next) && !this.alertKey && !this.alertLayers && !this.givingWay;
     }
 
@@ -242,7 +263,7 @@ class EvaDash extends EvaHud {
         return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
     }
 
-    _startTransition(now) {
+    _startTransition(now, notice) {
         const t = this.transition;
         if (t) {
             // a change while sweeping out: sweep back in from where the hexagons are, and swap again
@@ -263,7 +284,8 @@ class EvaDash extends EvaHud {
         this.client.uniform(ref, 'u_color', EVA_ORANGE.map((v) => v / 255));
         this.client.uniform(ref, 'u_dark', [0.02, 0.01, 0.0]);
         this.client.uniform(ref, 'u_t', [0]);
-        const name = this._pickStyle(), st = TRANSITION_STYLES[name];
+        const name = notice ? 'blue' : this._pickStyle();
+        const st = notice ? Object.assign({}, TRANSITION_STYLES.blue, { holdMinMs: NOTICE.holdMs }) : TRANSITION_STYLES[name];
         this.client.uniform(ref, 'u_style', [st.style]);
         this.client.uniform(ref, 'u_labelOn', [0]);
         this.client.uniform(ref, 'u_stretch', [1]);
@@ -273,9 +295,9 @@ class EvaDash extends EvaHud {
         const g = GEAR_LETTER, hx = g[0] - r.x, hy = g[1] - r.y;
         const meets = hx < r.w && hy < r.h && hx + g[2] > 0 && hy + g[3] > 0;
         this.client.uniform(ref, 'u_hole', meets ? [hx, hy, g[2], g[3]] : [0, 0, 0, 0]);
-        this.transition = { phase: 'in', from: now, cover: ref, label: null, rect: r, name, st };
+        this.transition = { phase: 'in', from: now, cover: ref, label: null, rect: r, name, st, words: notice ? NOTICE.words : null };
         this._transitionLabel(this.transition);
-        this.log.info('drive-mode change (' + name + '): hexagons over ' + this.activeName + ' -> ' + this._layoutName());
+        this.log.info(notice ? 'low fuel: the notice over ' + this.activeName : 'drive-mode change (' + name + '): hexagons over ' + this.activeName + ' -> ' + this._layoutName());
     }
 
     _stepTransition(now) {
@@ -360,9 +382,9 @@ class EvaDash extends EvaHud {
      * Made once a change, drawn again only if the mode is another by the swap. Each style lays it out its own way.
      */
     _transitionLabel(t) {
-        const mode = this._driveProfile();
+        const mode = t.words ? 'notice' : this._driveProfile();
         if (t.label && t.labelMode === mode) return;
-        const words = TRANSITION_WORDS[mode] || TRANSITION_WORDS.comfort;
+        const words = t.words || TRANSITION_WORDS[mode] || TRANSITION_WORDS.comfort;
         const L = t.st.label, w = Math.min(L.w, t.rect.w), h = Math.min(L.h, t.rect.h);
         const col = (c) => c.map((v) => v / 255);
         if (!t.label) {
@@ -394,7 +416,7 @@ class EvaDash extends EvaHud {
         } else if (t.st.style === 2) {
             text(words[0], { font: 'tr_hero', align: 'right', x: -Math.round(w * 0.53), offsetY: 4 });
             text(words[1], { font: 'tr_jp', align: 'left', x: Math.round(w * 0.5), offsetY: 22 });
-            text('DRIVE MODE CHANGE  //  MAGI APPROVED', { font: 'tr_sub', align: 'left', x: Math.round(w * 0.5), offsetY: 90 });
+            text(words[3] || 'DRIVE MODE CHANGE  //  MAGI APPROVED', { font: 'tr_sub', align: 'left', x: Math.round(w * 0.5), offsetY: 90 });
         } else {
             text('第 ' + words[2] + ' 話', { font: 'tr_jp', align: 'left', offsetY: 0 });
             text(words[1], { font: 'tr_big', align: 'left', offsetY: 56 });

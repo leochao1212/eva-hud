@@ -2,7 +2,7 @@
   "id": "shadow_dash",
   "title": "Shadow",
   "description": "Photo instrument cluster for iDrive 7: Sport, Comfort and Eco Pro each swap a full-cluster picture, with speed, rpm, gear, range, coolant and time on the right",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "vendor": "custom",
   "mguHmi": ["ID7"],
   "id7Only": true,
@@ -56,6 +56,9 @@
     "de.bmw.infrastructure.VehicleInformation": {
       "statusGearboxDrive": "s",
       "DataPowerTrain2": "s"
+    },
+    "de.bmw.infrastructure.EnvironmentalInformation": {
+      "ExteriorTemperature": "s"
     },
     "de.bmw.infotainment.KombiIF": {
       "statusRangeTankStatus": "rs"

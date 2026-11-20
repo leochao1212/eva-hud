@@ -2,7 +2,7 @@
   "id": "eva_hud",
   "title": "EVA",
   "description": "NERV battle display on the windshield HUD and the instrument cluster: giant gear, rev bar, speed and full-screen title-card alerts",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "vendor": "custom",
   "hmiOverrides": {"ID7": {"settings": {"centre": {"showWhen": [{"screens": "_never"}]}}}, "ID8": {"screens": [{"name": "MAIN", "kind": "menu", "title": "EVA", "settings": true, "items": [["text", "STATUS", "Starting the HUD"]]}], "settings": {"centre": {"default": "on", "reset": 1}, "hudComfort": {"default": "comfort", "reset": 2}, "hudSport": {"default": "sport", "reset": 2}, "hudEco": {"default": "eco", "reset": 2}, "dashComfort": {"default": "sqc", "reset": 1}, "dashSport": {"default": "sqs", "reset": 1}, "dashEco": {"default": "sqe", "reset": 1}, "bothDashComfort": {"default": "sqc", "reset": 1}, "bothDashSport": {"default": "sqs", "reset": 1}, "bothDashEco": {"default": "sqe", "reset": 1}}}},
   "loggingId": "OAEV",
@@ -56,6 +56,9 @@
     "de.bmw.infrastructure.VehicleInformation": {
       "statusGearboxDrive": "s",
       "DataPowerTrain2": "s"
+    },
+    "de.bmw.infrastructure.EnvironmentalInformation": {
+      "ExteriorTemperature": "s"
     },
     "de.bmw.infotainment.KombiIF": {
       "statusRangeTankStatus": "rs"
@@ -271,6 +274,12 @@
       "type": "choice",
       "options": [["atfield", "AT field"], ["blue", "Pattern Blue"], ["title", "Title card"], ["sweep", "Hexagon sweep"], ["random", "Random"], ["off", "Off"]],
       "default": "atfield"
+    },
+    {
+      "key": "fuelNotice",
+      "label": "Low fuel full-screen notice",
+      "type": "bool",
+      "default": true
     },
     {
       "key": "alertsOn",

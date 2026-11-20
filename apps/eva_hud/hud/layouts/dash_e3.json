@@ -446,6 +446,205 @@
    "class": "overlay",
    "z": 20,
    "keepInAlert": true
+  },
+  {
+   "id": "botinfo",
+   "type": "evacanvas",
+   "x": 0,
+   "y": 662,
+   "w": 1380,
+   "h": 56,
+   "class": "overlay",
+   "z": 25,
+   "parts": [
+    {
+     "id": "bi_fuel",
+     "type": "text",
+     "text": "燃料",
+     "font": "bi_jp",
+     "x": 24,
+     "y": 15,
+     "w": 50,
+     "h": 27,
+     "color": "sub",
+     "warnWhen": "fuel",
+     "warnColor": [
+      255,
+      214,
+      0,
+      255
+     ]
+    },
+    {
+     "id": "bi_fuel_en",
+     "type": "text",
+     "text": "FUEL",
+     "font": "bi_en",
+     "x": 76,
+     "y": 18,
+     "w": 46,
+     "h": 24,
+     "color": "sub",
+     "warnWhen": "fuel",
+     "warnColor": [
+      255,
+      214,
+      0,
+      255
+     ]
+    },
+    {
+     "id": "bi_fuelbar",
+     "type": "fuelbar",
+     "x": 128,
+     "y": 19,
+     "w": 240,
+     "h": 18,
+     "cells": 12,
+     "color": "fg",
+     "warnWhen": "fuel",
+     "warnColor": [
+      255,
+      214,
+      0,
+      255
+     ],
+     "blinkWhen": "fuel"
+    },
+    {
+     "id": "bi_range",
+     "type": "text",
+     "text": "{{range}}",
+     "font": "bi_num",
+     "x": 380,
+     "y": 9,
+     "w": 96,
+     "h": 37,
+     "color": "white",
+     "align": "right",
+     "warnWhen": "fuel",
+     "warnColor": [
+      255,
+      214,
+      0,
+      255
+     ]
+    },
+    {
+     "id": "bi_range_u",
+     "type": "text",
+     "text": "KM",
+     "font": "bi_en",
+     "x": 482,
+     "y": 21,
+     "w": 34,
+     "h": 24,
+     "color": "sub"
+    },
+    {
+     "id": "bi_temp",
+     "type": "text",
+     "text": "外気温",
+     "font": "bi_jp",
+     "x": 700,
+     "y": 15,
+     "w": 72,
+     "h": 27,
+     "color": "sub",
+     "warnWhen": "ice",
+     "warnColor": [
+      120,
+      205,
+      255,
+      255
+     ]
+    },
+    {
+     "id": "bi_temp_v",
+     "type": "text",
+     "text": "{{env:temp}}°C",
+     "font": "bi_num",
+     "x": 776,
+     "y": 9,
+     "w": 112,
+     "h": 37,
+     "color": "white",
+     "warnWhen": "ice",
+     "warnColor": [
+      120,
+      205,
+      255,
+      255
+     ]
+    },
+    {
+     "id": "bi_ice",
+     "type": "text",
+     "text": "{{env:ice}}",
+     "font": "bi_jp",
+     "x": 892,
+     "y": 15,
+     "w": 140,
+     "h": 27,
+     "color": "sub",
+     "warnWhen": "ice",
+     "warnColor": [
+      120,
+      205,
+      255,
+      255
+     ]
+    },
+    {
+     "id": "bi_time",
+     "type": "text",
+     "text": "{{time}}",
+     "font": "bi_num",
+     "x": 1040,
+     "y": 9,
+     "w": 110,
+     "h": 37,
+     "color": "white",
+     "align": "right"
+    },
+    {
+     "id": "bi_warn",
+     "type": "text",
+     "text": "{{fuel:warn}}",
+     "font": "bi_jp",
+     "x": 1166,
+     "y": 3,
+     "w": 200,
+     "h": 27,
+     "color": "sub",
+     "warnWhen": "fuel",
+     "warnColor": [
+      255,
+      214,
+      0,
+      255
+     ],
+     "blinkWhen": "fuel"
+    },
+    {
+     "id": "bi_warn_en",
+     "type": "text",
+     "text": "{{fuel:warnen}}",
+     "font": "bi_en",
+     "x": 1166,
+     "y": 30,
+     "w": 200,
+     "h": 24,
+     "color": "sub",
+     "warnWhen": "fuel",
+     "warnColor": [
+      255,
+      214,
+      0,
+      255
+     ]
+    }
+   ]
   }
  ]
 }
