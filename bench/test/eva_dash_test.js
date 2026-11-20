@@ -2060,6 +2060,106 @@ const tests = {
         assert.strictEqual(a.hu.settings.get('redline'), 6500);
         assert.deepStrictEqual(a.lines.filter((l) => /^ERROR/.test(l)).map((l) => l.slice(0, 160)), []);
     },
+    async 'hexagons refused by cluster-render: the new design goes up at once, never an empty cluster'() {
+        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3', dashSport: 'whole', dashTransitionStyle: 'sweep' });
+        await wait(SETTLE_MS);
+        const d = counts.evas.find((e) => e.primary), c = a.dash();
+        drive(a, 'SPORT');
+        await wait(100);
+        const [ref] = Array.from(c.layers.entries()).find(([, l]) => l.kind === 'effect' && l.klass === 'alert');
+        c.layers.delete(ref);
+        c.emit('refused', 'layer', ref, 'too many layers');
+        await wait(100);
+        assert.ok(!d.transition, 'no transition left');
+        assert.strictEqual(d.activeName, 'eva', 'swapped straight away');
+        assert.ok(d.widgets.size > 0 && Array.from(d.widgets.values()).every((x) => c.layers.has(x.ref)), 'the new design is up');
+    },
+    async 'an alert layer refused: the normal display comes back and alerts wait for the next rebuild'() {
+        const a = startApp({ screens: 'dash', demo: 'on', dashComfort: 'whole' });
+        await wait(SETTLE_MS);
+        const d = counts.evas.find((e) => e.primary), c = a.dash();
+        a.set('alertPreview', 'heat');
+        await wait(200);
+        assert.ok(d.alertKey, 'the alert shows');
+        const ref = d.alertLayers.colour;
+        c.emit('refused', 'layer', ref, "the service's pixel memory is full");
+        await wait(200);
+        assert.strictEqual(d.alertKey, null, 'the alert gave way');
+        assert.ok(/refused/.test(d.alertBroken || ''), d.alertBroken);
+        assert.strictEqual(c.alertLayers().length, 0, 'no alert layer left showing');
+        assert.ok(Array.from(d.widgets.values()).every((x) => c.layers.has(x.ref) && c.layers.get(x.ref).visible !== 0), 'the normal layers are back');
+    },
+    async 'a bottom strip refused on its connection is made again'() {
+        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'c3' });
+        await wait(SETTLE_MS);
+        const strips = FakeClient.all[2], before = Array.from(strips.layers.keys());
+        assert.strictEqual(before.length, 3);
+        strips.layers.delete(before[1]);
+        strips.emit('refused', 'layer', before[1], 'too many layers');
+        await wait(300);
+        assert.strictEqual(strips.layers.size, 2, 'gone until the retry');
+        await wait(2000);
+        assert.strictEqual(strips.layers.size, 3, 'made again');
+        assert.ok(Array.from(strips.layers.keys()).indexOf(before[1]) < 0, 'as a new layer');
+        assert.deepStrictEqual(Array.from(strips.layers.keys()).filter((r) => before.indexOf(r) >= 0), [before[0], before[2]], 'the others untouched');
+    },
+    async 'an alert preview needs a car that says it stands: an unknown speed is not parked'() {
+        const a = startApp({ screens: 'dash', demo: 'off', dashComfort: 'whole' });
+        await wait(SETTLE_MS);
+        const d = counts.evas.find((e) => e.primary);
+        a.set('alertPreview', 'heat');
+        await wait(200);
+        assert.strictEqual(d.alertKey, null, 'no speed from the car: no preview');
+        a.hu.feed('de.bmw.infotainment.vehicle.Vehicle2', 'statusCarSpeed2', { speedVehicleCentreOfGravity: 0 });
+        await wait(200);
+        assert.strictEqual(d.alertKey, 'heat', 'standing: the preview shows');
+    },
+    async 'the centre page on the Store renderer: choices open in the kit sheet, the controller picks, tilting left cancels'() {
+        const a = startApp({ screens: 'dash', demo: 'on' });
+        let rec = null, sheet = null;
+        const present = a.hu.display.present.bind(a.hu.display);
+        a.hu.display.present = (name, cv, soft) => { rec = cv; return present(name, cv, soft); };
+        a.hu.display.canSheet = () => true;                     // as the GPU renderer's full-screen layout
+        a.hu.display.openSheet = (sh) => { sheet = sh; return true; };
+        await wait(SETTLE_MS + 300);
+        a.hu.display.onTab(4);
+        await wait(300);
+        rec.targets.find((t) => t.key === 'row:redline').run();
+        await wait(100);
+        assert.ok(sheet, 'the kit sheet, not the overlay');
+        assert.strictEqual(sheet.rows()[sheet.sub].on, true, 'the controller starts on the value set now');
+        assert.strictEqual(sheet.back(), 'close', 'tilting left closes');
+        assert.strictEqual(a.hu.settings.get('redline'), 7000, 'nothing changed');
+        sheet.sub = 0;
+        sheet.move(1);
+        assert.strictEqual(sheet.press(), 'close');
+        assert.strictEqual(a.hu.settings.get('redline'), 6000, 'the press picked the second choice');
+        sheet.move(-5);
+        assert.strictEqual(sheet.sub, -1, 'up past the first choice: Back');
+        assert.strictEqual(sheet.press(), 'close');
+    },
+    async "the centre page switches never change the other screen's designs"() {
+        const a = startApp({ screens: 'hud', demo: 'on', hudComfort: 'comfort', bothHudComfort: 'eva', dashComfort: 'c3', bothDashComfort: 'whole' });
+        let rec = null;
+        const present = a.hu.display.present.bind(a.hu.display);
+        a.hu.display.present = (name, cv, soft) => { rec = cv; return present(name, cv, soft); };
+        await wait(SETTLE_MS + 300);
+        a.hu.display.onTab(1);
+        await wait(300);
+        rec.targets.find((t) => t.key === 'switch:dash').run();
+        await wait(300);
+        assert.strictEqual(a.hu.settings.get('screens'), 'both');
+        assert.strictEqual(a.hu.settings.get('bothHudComfort'), 'comfort', 'the HUD keeps the design it showed');
+        rec.targets.find((t) => t.key === 'switch:dash').run();
+        await wait(300);
+        assert.strictEqual(a.hu.settings.get('screens'), 'hud');
+        assert.strictEqual(a.hu.settings.get('hudComfort'), 'comfort');
+        a.hu.display.onTab(3);
+        await wait(300);
+        rec.targets.find((t) => t.key === 'button:dismissAlert').run();
+        await wait(200);
+        assert.strictEqual(a.hu.settings.get('dismissAlert'), false, 'a button: back off at once');
+    },
     async 'a dash that cannot start leaves the HUD running and says so'() {
         const a = startApp({ screens: 'both' }, { dashThrows: true });
         await wait(700);

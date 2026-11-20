@@ -80,6 +80,7 @@ const Car = require('./kit/car');
 
 const BOOST_SCALE = { factor: 0.01, offset: 0, invalid: 255 }; // see header comment
 const MEM_RETRY_MS = [5000, 10000, 20000, 30000, 30000];
+const MEM_RETRY_LATER_MS = 60000;      // after those, once a minute for as long as the layout stays refused
 const TICK_MS = 50;              // 20 Hz: shift bar and gauges
 const TEXT_MS = 200;             // text re-draws at most 5 times a second (what BMW's own readouts do)
 const DEFAULT_LOCATION = { lat: 35.2271, lon: -80.8431 }; // Charlotte, NC: for the Auto theme's sunset
@@ -249,13 +250,13 @@ class HudApp {
     /**
      * cluster-render's 16 MB of pixel memory is shared by every app. A layer refused because it was
      * full stays refused, so a layout drawn while another app held the memory stays incomplete even
-     * after that app lets go. Build again after 5, 10, 20, 30 and 30 s; a rebuild for any other
-     * reason starts the count again.
+     * after that app lets go. Build again after 5, 10, 20, 30 and 30 s, then once a minute while it is still
+     * refused (another app may hold the memory for long); a rebuild for any other reason starts the count again.
      */
     _retryForMemory() {
         const r = this.memRetry;
-        if (r.timer || r.n >= MEM_RETRY_MS.length) return;
-        const ms = MEM_RETRY_MS[r.n];
+        if (r.timer) return;
+        const ms = r.n < MEM_RETRY_MS.length ? MEM_RETRY_MS[r.n] : MEM_RETRY_LATER_MS;
         this.log.warn('pixel memory full: building again in ' + (ms / 1000) + ' s');
         r.timer = setTimeout(() => {
             r.timer = null;

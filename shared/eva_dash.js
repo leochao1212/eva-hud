@@ -27,6 +27,7 @@
 const EvaHud = require('./eva_hud');
 const shaders = require('./shaders');
 const textRaster = require('./hud_text');
+const PersistentLayers = require('./persistent_layers');
 
 const POPUP_SLOT = 0x202;
 /*
@@ -136,11 +137,10 @@ class EvaDash extends EvaHud {
         if (target !== this.target) { this.target = target; this.targetState = null; }
         this.freedWidgets = [];
         if (this.transition && (target !== 'panel' || this._layoutName() === 'off')) this._endTransition(true);
-        this.stripsSeen = {};
+        this._stripSet().begin();
         super._rebuildInner();
         // strips the new design doesn't have (a centre design, or off): only now are they dropped
-        Object.keys(this.strips || {}).forEach((id) => { if (!this.stripsSeen[id]) this._dropStrip(id); });
-        this.stripsSeen = null;
+        this._stripSet().end();
     }
 
     _create(w) {
@@ -150,12 +150,18 @@ class EvaDash extends EvaHud {
 
     /* ---------------- the bottom strips: their own connection, kept across a swap ---------------- */
 
+    _stripSet() { return this.strips || (this.strips = new PersistentLayers(this.log, 'bottom strip')); }
+
     _stripClient() {
         if (!this.stripsClient) {
             const name = (this.view.clientName || this.ctx.spec.id) + '_strips';
             const c = new this.client.constructor(name, this.socketPath, this.log, this.size, false);
-            c.on('refused', (op, ref, reason) => this.log.warn('refused ' + op + ' on ' + ref + ' [strips]: ' + reason));
-            c.on('layer', (ref, state, reason) => { if (state === 'error') this.log.warn('layer ' + ref + ' [strips] error: ' + reason); });
+            // a refused strip is made again (persistent_layers.js): a rebuild alone would keep the dead ref
+            c.on('refused', (op, ref, reason) => { this.log.warn('refused ' + op + ' on ' + ref + ' [strips]: ' + reason); this._stripSet().failed(ref, reason); });
+            c.on('layer', (ref, state, reason) => {
+                if (state === 'error') { this.log.warn('layer ' + ref + ' [strips] error: ' + reason); this._stripSet().failed(ref, reason); }
+                else if (state === 'shown') this._stripSet().shown(ref);
+            });
             c.on('disconnected', () => this.log.warn('cluster-render disconnected [strips], client will retry'));
             this.stripsClient = c;
             c.connect();          // layers made before it is up are sent when it is
@@ -164,32 +170,34 @@ class EvaDash extends EvaHud {
     }
 
     _keepStrip(w) {
-        const key = [w.x, w.y, w.w, w.h, w.color, w.class, w.z].join(',');
-        this.strips = this.strips || {};
-        if (this.stripsSeen) this.stripsSeen[w.id] = true;
-        const kept = this.strips[w.id];
-        if (kept && kept.key === key) return;
-        if (kept) this._dropStrip(w.id);
-        const main = this.client, c = this._stripClient();
-        this.client = c;                   // the fill's own code makes it, on the strips' connection
-        try { super._create(w); } finally { this.client = main; }
-        const x = this.widgets.get(w.id);
-        if (!x) return;
-        this.widgets.delete(w.id);
-        this.strips[w.id] = { ref: x.ref, key };
-        if (this.givingWay) c.set(x.ref, { visible: 0 });
+        this._stripSet().keep(w.id, [w.x, w.y, w.w, w.h, w.color, w.class, w.z].join(','), () => this._makeStrip(w));
     }
 
-    _dropStrip(id) {
-        const s = this.strips && this.strips[id];
-        if (!s) return;
-        this.stripsClient.drop(s.ref);
-        delete this.strips[id];
+    /** The fill's own code makes it, on the strips' connection; it is kept out of this.widgets. */
+    _makeStrip(w) {
+        const main = this.client, c = this._stripClient();
+        this.client = c;
+        try { super._create(w); } finally { this.client = main; }
+        const x = this.widgets.get(w.id);
+        if (!x) return null;
+        this.widgets.delete(w.id);
+        return { ref: x.ref, client: c };
     }
 
     _showForPopup(hide, now) {
-        Object.keys(this.strips || {}).forEach((id) => this.stripsClient.set(this.strips[id].ref, { visible: hide ? 0 : 1 }));
+        this._stripSet().setVisible(!hide);
         super._showForPopup(hide, now);
+    }
+
+    /** The hexagons or their label refused: no cover, so the new design goes up at once (never an empty cluster). */
+    _onRefused(op, ref, reason) {
+        const t = this.transition;
+        if (t && (ref === t.cover || ref === t.label)) {
+            this.log.warn('drive-mode change: hexagons refused (' + reason + '), swapping without them');
+            this._endTransition();
+            return;
+        }
+        super._onRefused(op, ref, reason);
     }
 
     /** The drive mode arrives on the HUD's signals. */
@@ -272,7 +280,8 @@ class EvaDash extends EvaHud {
 
     _stepTransition(now) {
         const t = this.transition;
-        if (this.alertKey || this.givingWay) { this._endTransition(); return; }      // an alert or a BMW pop-up goes first
+        // an alert or a BMW pop-up goes first: asked now, not after this tick's own pop-up check
+        if (this.alertKey || this.givingWay || (this.popups && this.popups.shown(this._popupSlot(), now))) { this._endTransition(); return; }
         if (t.phase === 'in') {
             const p = Math.min(1, (now - t.from) / t.st.inMs);
             this.client.uniform(t.cover, 'u_t', [Math.round(p * 1000) / 1000]);
@@ -406,7 +415,7 @@ class EvaDash extends EvaHud {
 
     stop() {
         this._endTransition(true);
-        Object.keys(this.strips || {}).forEach((id) => this._dropStrip(id));
+        if (this.strips) this.strips.dropAll();
         if (this.stripsClient) this.stripsClient.close();
         super.stop();
     }

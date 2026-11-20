@@ -15,6 +15,7 @@
   "maxDiskUsage": 83886080,
   "shared": [
     "hud.js",
+    "persistent_layers.js",
     "hud_text.js",
     "hud_data.js",
     "hud_themes.js",

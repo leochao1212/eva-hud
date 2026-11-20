@@ -19,6 +19,7 @@ import re
 import zlib
 
 from PIL import Image, ImageDraw, ImageFont
+from fontTools.ttLib import TTFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -26,14 +27,14 @@ SRC = os.path.join(HERE, 'fonts-src')
 OUT = os.path.join(ROOT, 'kit', 'runtime', 'fonts')
 ATLAS_W = 1024
 PAD = 2
-LATIN = ''.join(chr(c) for c in range(32, 127)) + '°·×–—…•→←↑↓±²³µ%'
+LATIN = ''.join(chr(c) for c in range(32, 127)) + '°·×–—…•→←↑↓±²³µ%≥≤'
 
 FAMILIES = [
     ('label', 'BarlowCondensed-SemiBold.ttf', [18, 24, 32, 44], 'latin'),
     ('light', 'BarlowCondensed-SemiBold.ttf', [32, 64], 'latin'),
     ('bold', 'BarlowCondensed-Bold.ttf', [24, 32, 44, 64], 'latin'),
     ('num', 'BarlowCondensed-Bold.ttf', [40, 64, 96, 150], 'latin'),
-    ('cjk', 'MatisseSub-ShipporiMinchoB1-EB.ttf', [28, 56], 'cjk'),
+    ('cjk', 'MatisseSub-ShipporiMinchoB1-EB.ttf', [28, 56], 'cjk'),     # what Matisse lacks (≥ ≤): Barlow Condensed Bold
 ]
 
 
@@ -49,11 +50,17 @@ def cjk_chars():
     return ''.join(sorted(keep)) + LATIN
 
 
+FALLBACK = 'BarlowCondensed-Bold.ttf'
+
+
 def bake_size(font_file, size, chars):
-    font = ImageFont.truetype(os.path.join(SRC, font_file), size)
-    ascent, descent = font.getmetrics()
+    main = ImageFont.truetype(os.path.join(SRC, font_file), size)
+    spare = ImageFont.truetype(os.path.join(SRC, FALLBACK), size)
+    has = TTFont(os.path.join(SRC, font_file)).getBestCmap()
+    ascent, descent = main.getmetrics()
     cells = []
     for ch in chars:
+        font = main if ord(ch) in has or ch == ' ' else spare
         l, t, r, b = font.getbbox(ch, anchor='ls')
         adv = round(font.getlength(ch), 2)
         if r <= l or b <= t:

@@ -932,7 +932,7 @@ class EvaHud extends HudApp {
     _alertNow(now) {
         if (!this._evaShowing()) return null;
         const d = this.car.data(), preview = this.setting('alertPreview');
-        if (preview !== 'off' && (d.demo || !isNum(d.speed) || d.speed < 1)) {
+        if (preview !== 'off' && (d.demo || (isNum(d.speed) && d.speed < 1))) {      // parked: a speed the car gave (unknown is not parked)
             if (preview === 'multi') return { kind: 'multi', ids: ['knock', 'heat', 'fuel'], count: 3, preview: true };
             return { kind: 'single', id: preview, value: ALERTS[preview].preview, preview: true };
         }
@@ -1080,8 +1080,28 @@ class EvaHud extends HudApp {
         const a = this.alertLayers;
         if (this.client.ready && a) [a.canvas.ref, a.colour, a.white].forEach((ref) => this.client.drop(ref));
         this.alertLayers = null; this.alertLayout = null; this.alertKey = null; this.normalHidden = false; this.alertBroken = null;
-        this.givingWay = false;      // the new layers show until the next tick hides them, if the pop-up is still up
+        this.givingWay = false;
         super._rebuildInner();
+        // a BMW pop-up up now: the new layers hide at once, not a tick later
+        const now = Date.now();
+        if (this.popups && this.activeName && this.activeName !== 'off' && this.popups.shown(this._popupSlot(), now)) {
+            this.givingWay = true;
+            this._showForPopup(true, now);
+        }
+    }
+
+    /**
+     * cluster-render refused one of the alert's layers (it answers after the ref is ours): the alert can't show, so the
+     * normal layers come back and alerts stay off until the next rebuild (a memory retry is one) tries them again.
+     */
+    _onRefused(op, ref, reason) {
+        const a = this.alertLayers;
+        if (a && [a.canvas.ref, a.colour, a.white].indexOf(ref) >= 0 && !this.alertBroken) {
+            this.alertBroken = 'an alert layer was refused (' + (reason || op) + ')';
+            this.log.warn('alerts off: ' + this.alertBroken + '; the normal display comes back');
+            if (this.alertKey) this._showAlert(null, Date.now());
+            this._statusSoon();
+        }
     }
 
     /** While an alert shows, the normal layers are hidden on purpose: not worth a note. */

@@ -16,6 +16,7 @@
 const EvaHud = require('./eva_hud');
 const textRaster = require('./hud_text');
 const hudData = require('./hud_data');
+const PersistentLayers = require('./persistent_layers');
 
 const PHOTOS = ['sport', 'comfort', 'eco'];
 const PHOTO_W = 1920, PHOTO_H = 640;
@@ -83,6 +84,7 @@ void main() {
 // the styles: [u_style, ms]; Random picks one of the moving ones, not the last
 const PHOTO_STYLES = { off: [0, 0], fade: [0, 250], wave: [1, 1100], stripes: [2, 1000], sheen: [3, 900] };
 const PHOTO_RANDOM = ['wave', 'stripes', 'sheen'];
+const PHOTO_SHOWN_MS = 700;     // the most a change waits for cluster-render to say the new photo is drawn
 const PHOTO_SPAN = 1240;     // the photos' art ends about here (tools/shadow_geom.py ART_RIGHT), the data column's black after
 
 class ShadowDash extends EvaHud {
@@ -144,10 +146,10 @@ class ShadowDash extends EvaHud {
 
     _rebuildInner() {
         if (this._layoutName() === 'off') this._dropPhotos();   // free the memory and the panel for EVA
-        this.stripsSeen = {};
+        this._stripSet().begin();
         EvaHud.prototype._rebuildInner.call(this);
         // strips the new layout no longer has (or 'off'): only now are they dropped
-        Object.keys(this.strips || {}).forEach((id) => { if (!this.stripsSeen[id]) this._dropStrip(id); });
+        this._stripSet().end();
     }
 
     _create(w) {
@@ -159,29 +161,20 @@ class ShadowDash extends EvaHud {
 
     /**
      * The black fills over BMW's bottom status row are the same in every mode. A rebuild used to
-     * drop them and make them again, and BMW's row could show through for a frame. Kept here, out
-     * of this.widgets, they stay as they are unless their rect or colour changes.
+     * drop them and make them again, and BMW's row could show through for a frame. Kept out of
+     * this.widgets (shared/persistent_layers.js, as EVA's), they stay as they are unless their rect,
+     * colour, class or z changes, and one cluster-render refused is made again.
      */
-    _keepStrip(w) {
-        const key = [w.x, w.y, w.w, w.h, w.color].join(',');
-        this.strips = this.strips || {};
-        if (this.stripsSeen) this.stripsSeen[w.id] = true;
-        const kept = this.strips[w.id];
-        if (kept && kept.key === key) return;
-        if (kept) this._dropStrip(w.id);
-        EvaHud.prototype._create.call(this, w);
-        const x = this.widgets.get(w.id);
-        if (!x) return;
-        this.widgets.delete(w.id);
-        this.strips[w.id] = { ref: x.ref, key };
-        if (this.givingWay) this.client.set(x.ref, { visible: 0 });
-    }
+    _stripSet() { return this.strips || (this.strips = new PersistentLayers(this.log, 'bottom strip')); }
 
-    _dropStrip(id) {
-        const s = this.strips && this.strips[id];
-        if (!s) return;
-        this.client.drop(s.ref);
-        delete this.strips[id];
+    _keepStrip(w) {
+        this._stripSet().keep(w.id, [w.x, w.y, w.w, w.h, w.color, w.class, w.z].join(','), () => {
+            EvaHud.prototype._create.call(this, w);
+            const x = this.widgets.get(w.id);
+            if (!x) return null;
+            this.widgets.delete(w.id);
+            return { ref: x.ref, client: this.client };
+        });
     }
 
     /** The three photos as assets, sent once. False when this build has no etc2 copies. */
@@ -223,7 +216,8 @@ class ShadowDash extends EvaHud {
         if (this.givingWay) this.client.set(ref, { visible: 0 });
         this.photo = { ref, name: w.photo };
         if (cur) {
-            this.photoFade = { ref, under: cur.ref, from: Date.now(), ms: st[1], style: st[0] };
+            // the change starts once cluster-render has drawn the new photo (or after PHOTO_SHOWN_MS without word)
+            this.photoFade = { ref, under: cur.ref, from: null, made: Date.now(), ms: st[1], style: st[0] };
             if (!st[1]) this._endFade();
             else this.log.info('photo change: ' + name);
         }
@@ -254,6 +248,11 @@ class ShadowDash extends EvaHud {
     _stepFade(now) {
         const f = this.photoFade;
         if (!f) return;
+        if (f.from === null) {
+            const st = this.layerStates.get(f.ref);
+            if (!(st && st.state === 'shown') && now - f.made < PHOTO_SHOWN_MS) return;
+            f.from = now;
+        }
         const t = (now - f.from) / f.ms;
         if (t >= 1) { this._endFade(); return; }
         if (t > 0) this.client.uniform(f.ref, f.style === 0 ? 'u_alpha' : 'u_t', [Math.round(t * 1000) / 1000]);
@@ -268,6 +267,15 @@ class ShadowDash extends EvaHud {
 
     /** cluster-render refused an asset or the photo layer (or the renderer its texture): the rgba photo from then on. */
     _onRefused(op, ref, reason) {
+        if (this.strips && this.strips.failed(ref, reason)) return;
+        const photoRef = (this.photo && this.photo.ref === ref) || (this.photoFade && this.photoFade.ref === ref) ||
+            (this.photoAssets && Object.keys(this.photoAssets).some((k) => this.photoAssets[k] === ref));
+        if (photoRef && /pixel memory is full/.test(reason || '')) {
+            // out of memory, not an etc2 problem: the rgba photo would need more. Let go; hud.js builds again later.
+            this.log.warn('etc2 photo refused for memory: building again when the memory is free');
+            this._dropPhotos();
+            return;
+        }
         const mine = (this.photo && this.photo.ref === ref) ||
             (this.photoAssets && Object.keys(this.photoAssets).some((k) => this.photoAssets[k] === ref));
         if (!mine || this.etc2Broken) return;
@@ -280,7 +288,7 @@ class ShadowDash extends EvaHud {
     _showForPopup(hide, now) {
         if (this.photo) this.client.set(this.photo.ref, { visible: hide ? 0 : 1 });
         if (this.photoFade) this.client.set(this.photoFade.under, { visible: hide ? 0 : 1 });
-        Object.keys(this.strips || {}).forEach((id) => this.client.set(this.strips[id].ref, { visible: hide ? 0 : 1 }));
+        this._stripSet().setVisible(!hide);
         EvaHud.prototype._showForPopup.call(this, hide, now);
     }
 
@@ -291,7 +299,7 @@ class ShadowDash extends EvaHud {
 
     stop() {
         this._dropPhotos();
-        Object.keys(this.strips || {}).forEach((id) => this._dropStrip(id));
+        if (this.strips) this.strips.dropAll();
         EvaHud.prototype.stop.call(this);
     }
 

@@ -166,6 +166,8 @@ class FakeClient {
             return ref;    // the real client hands out the ref; the service refuses it later
         }
         this.peakBytes = Math.max(this.peakBytes || 0, this.usedBytes());
+        // an effect layer has no pixels to wait for: the service says it is drawn straight away (an image, once its pixels came)
+        if (kind === 'effect') setImmediate(() => { if (this.layers.has(ref)) this.emit('layer', ref, 'shown'); });
         return ref;
     }
     usedBytes() { let n = 0; this.layers.forEach((l) => { n += l.bytes || 0; }); return n; }
@@ -368,6 +370,35 @@ function runtimeTests() {
                 const rgba = Array.from(client.layers.values()).filter((l) => l.kind === 'image' && l.iw === 1920 && l.ih === 640);
                 assert.strictEqual(rgba.length, 1, 'the rgba photo instead');
                 assert.ok(a.lines.some((l) => /etc2 photo refused/.test(l)), 'logged');
+            } finally { dash.stop(); }
+        },
+        async 'a photo refused for memory is not taken for an etc2 problem: no rgba photo'() {
+            const a = startApp({});
+            await wait(SETTLE_MS);
+            const dash = a.dash(), client = a.client();
+            try {
+                const asset = Array.from(client.layers.entries()).find(([, l]) => l.kind === 'asset')[0];
+                client.emit('refused', 'asset', asset, "the service's pixel memory is full");
+                await wait(200);
+                assert.ok(!dash.etc2Broken, 'etc2 still in use');
+                assert.ok(!Array.from(client.layers.values()).some((l) => l.kind === 'image' && l.iw === 1920 && l.ih === 640), 'no 9.8 MB rgba photo');
+            } finally { dash.stop(); }
+        },
+        async 'a bottom strip refused is made again, the others stay'() {
+            const a = startApp({});
+            await wait(SETTLE_MS);
+            const dash = a.dash(), client = a.client();
+            try {
+                const strips = () => Array.from(client.layers.entries()).filter(([, l]) => l.kind === 'effect' && l.uniforms.u_hole).map(([r]) => r);
+                const before = strips();
+                assert.strictEqual(before.length, 3);
+                client.layers.delete(before[0]);
+                client.emit('refused', 'layer', before[0], 'too many layers');
+                await wait(300);
+                assert.strictEqual(strips().length, 2);
+                await wait(2000);
+                assert.strictEqual(strips().length, 3, 'made again');
+                assert.ok(before.slice(1).every((r) => strips().indexOf(r) >= 0), 'the other two untouched');
             } finally { dash.stop(); }
         },
         async 'a layer refused for pixel memory is built again a few seconds later'() {
