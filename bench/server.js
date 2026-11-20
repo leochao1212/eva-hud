@@ -41,7 +41,8 @@ const APP_ID = process.argv[2] || process.env.BENCH_APP || 'eva_hud';
 const APP_DIR = path.join(ROOT, 'apps', APP_ID);
 if (!fs.existsSync(path.join(APP_DIR, 'app.json'))) { console.error('no app ' + APP_ID + ' under apps/'); process.exit(2); }
 const DATA_DIR = path.join(__dirname, '.data', APP_ID);   // the app's data/ on the bench (settings.json, layouts/)
-const STAGE = path.join(ROOT, 'dist', APP_ID);
+process.env.MGU_DIST = process.env.MGU_DIST || 'dist-bench';    // its own build folder: a test or a release build can run beside it
+const STAGE = path.join(ROOT, process.env.MGU_DIST, APP_ID);
 const TARGETS = { hud: [800, 480], map: [1088, 480], panel: [1920, 720] };
 const CLASSES = ['ambient', 'content', 'overlay', 'alert'];
 const MAX_MSG = 5529664;
@@ -155,7 +156,8 @@ const renderServer = net.createServer((sock) => {
             st.app = m.app || '?';
             if (m.proto !== 1) bad('hello proto ' + m.proto + ', service speaks 1');
             log('info', 'renderer: hello from ' + st.app + ' (proto ' + m.proto + ')');
-            writeEv(sock, { ev: 'hello', backend: 'bench', targets: Object.keys(TARGETS).join(',') });
+            // as cluster-render: each target with its size (hud.js fits the layouts to it)
+            writeEv(sock, { ev: 'hello', backend: 'bench', targets: Object.keys(TARGETS).map((k) => k + ':' + TARGETS[k].join('x')).join(',') });
             return;
         }
         if (!st.hello) return bad(m.op + ' before hello');

@@ -2,7 +2,7 @@
   "id": "eva_hud",
   "title": "EVA",
   "description": "NERV battle display on the windshield HUD and the instrument cluster: giant gear, rev bar, speed and full-screen title-card alerts",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "vendor": "custom",
   "hmiOverrides": {"ID7": {"settings": {"centre": {"showWhen": [{"screens": "_never"}]}}}, "ID8": {"screens": [{"name": "MAIN", "kind": "menu", "title": "EVA", "settings": true, "items": [["text", "STATUS", "Starting the HUD"]]}], "settings": {"centre": {"default": "on", "reset": 1}, "hudComfort": {"default": "comfort", "reset": 2}, "hudSport": {"default": "sport", "reset": 2}, "hudEco": {"default": "eco", "reset": 2}, "dashComfort": {"default": "sqc", "reset": 1}, "dashSport": {"default": "sqs", "reset": 1}, "dashEco": {"default": "sqe", "reset": 1}, "bothDashComfort": {"default": "sqc", "reset": 1}, "bothDashSport": {"default": "sqs", "reset": 1}, "bothDashEco": {"default": "sqe", "reset": 1}}}},
   "loggingId": "OAEV",
@@ -118,7 +118,7 @@
       "label": "Comfort dash (Dash only)",
       "type": "choice",
       "default": "whole",
-      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["sq", "SQ: ID8 中央方形"], ["sqs", "SQ Sport: ID8 戰鬥"], ["sqc", "SQ Comfort: ID8 第3新東京市"], ["sqe", "SQ Eco: ID8 活動限界"], ["off", "Off (BMW's own)"]],
+      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["sq", "SQ: ID8 中央方形"], ["sqs", "SQ Sport: ID8 戰鬥"], ["sqc", "SQ Comfort: ID8 第3新東京市"], ["sqe", "SQ Eco: ID8 活動限界"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "dash"}]
     },
     {
@@ -126,7 +126,7 @@
       "label": "Sport dash (Dash only)",
       "type": "choice",
       "default": "whole",
-      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["sq", "SQ: ID8 中央方形"], ["sqs", "SQ Sport: ID8 戰鬥"], ["sqc", "SQ Comfort: ID8 第3新東京市"], ["sqe", "SQ Eco: ID8 活動限界"], ["off", "Off (BMW's own)"]],
+      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["sq", "SQ: ID8 中央方形"], ["sqs", "SQ Sport: ID8 戰鬥"], ["sqc", "SQ Comfort: ID8 第3新東京市"], ["sqe", "SQ Eco: ID8 活動限界"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "dash"}]
     },
     {
@@ -134,7 +134,7 @@
       "label": "Eco Pro dash (Dash only)",
       "type": "choice",
       "default": "whole",
-      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["sq", "SQ: ID8 中央方形"], ["sqs", "SQ Sport: ID8 戰鬥"], ["sqc", "SQ Comfort: ID8 第3新東京市"], ["sqe", "SQ Eco: ID8 活動限界"], ["off", "Off (BMW's own)"]],
+      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["sq", "SQ: ID8 中央方形"], ["sqs", "SQ Sport: ID8 戰鬥"], ["sqc", "SQ Comfort: ID8 第3新東京市"], ["sqe", "SQ Eco: ID8 活動限界"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "dash"}]
     },
     {
@@ -150,7 +150,7 @@
       "label": "Comfort dash (HUD + Dash)",
       "type": "choice",
       "default": "whole",
-      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["sq", "SQ: ID8 中央方形"], ["sqs", "SQ Sport: ID8 戰鬥"], ["sqc", "SQ Comfort: ID8 第3新東京市"], ["sqe", "SQ Eco: ID8 活動限界"], ["off", "Off (BMW's own)"]],
+      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["sq", "SQ: ID8 中央方形"], ["sqs", "SQ Sport: ID8 戰鬥"], ["sqc", "SQ Comfort: ID8 第3新東京市"], ["sqe", "SQ Eco: ID8 活動限界"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "both"}]
     },
     {
@@ -166,7 +166,7 @@
       "label": "Sport dash (HUD + Dash)",
       "type": "choice",
       "default": "whole",
-      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["sq", "SQ: ID8 中央方形"], ["sqs", "SQ Sport: ID8 戰鬥"], ["sqc", "SQ Comfort: ID8 第3新東京市"], ["sqe", "SQ Eco: ID8 活動限界"], ["off", "Off (BMW's own)"]],
+      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["sq", "SQ: ID8 中央方形"], ["sqs", "SQ Sport: ID8 戰鬥"], ["sqc", "SQ Comfort: ID8 第3新東京市"], ["sqe", "SQ Eco: ID8 活動限界"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "both"}]
     },
     {
@@ -182,7 +182,7 @@
       "label": "Eco Pro dash (HUD + Dash)",
       "type": "choice",
       "default": "whole",
-      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c2", "C2: Title card"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["sq", "SQ: ID8 中央方形"], ["sqs", "SQ Sport: ID8 戰鬥"], ["sqc", "SQ Comfort: ID8 第3新東京市"], ["sqe", "SQ Eco: ID8 活動限界"], ["off", "Off (BMW's own)"]],
+      "options": [["whole", "Original (whole cluster)"], ["a", "A: Command room"], ["b", "B: Active limit"], ["d", "D: Battle stations (whole cluster)"], ["c1", "C1: Big clock"], ["c3", "C3: Tokyo-3 (whole cluster)"], ["e1", "E1: Fuel use"], ["e2", "E2: Hex rings"], ["e3", "E3: Active limit (whole cluster)"], ["sq", "SQ: ID8 中央方形"], ["sqs", "SQ Sport: ID8 戰鬥"], ["sqc", "SQ Comfort: ID8 第3新東京市"], ["sqe", "SQ Eco: ID8 活動限界"], ["off", "Off (BMW's own)"]],
       "showWhen": [{"screens": "both"}]
     },
     {

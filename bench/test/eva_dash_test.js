@@ -12,7 +12,8 @@ const os = require('os');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..');
-const STAGE = path.join(ROOT, 'dist', 'eva_hud');
+process.env.MGU_DIST = process.env.MGU_DIST || 'dist-test';     // its own build folder: never the release's or the bench's
+const STAGE = path.join(ROOT, process.env.MGU_DIST, 'eva_hud');
 const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 const TPMS = 'de.bmw.infotainment.vehicle.TPMS';
 
@@ -25,6 +26,8 @@ class FakeClient {
         this.name = name;
         this.ready = false;
         this.backend = 'test';
+        // what cluster-render's hello names, with each target's size: the dash's centre designs are fitted to the map's
+        this.targets = 'hud:800x480,panel:1920x720,map:1088x480';
         this.layers = new Map();
         this.handlers = {};
         this.nextRef = 1;
@@ -40,9 +43,13 @@ class FakeClient {
     close() { this.ready = false; }
     _add(kind, o) {
         const ref = this.nextRef++;
-        if (kind !== 'asset' && Array.from(this.layers.values()).filter((l) => l.kind !== 'asset').length >= 8) { this.refused.push(o.target + ': too many layers'); return ref; }
+        // as the service: the client has the ref at once, a refusal comes back later as an event
+        const refuse = (why) => { this.refused.push(o.target + ': ' + why); setImmediate(() => this.emit('refused', kind === 'asset' ? 'asset' : 'layer', ref, why)); return ref; };
+        const layersOf = (c) => Array.from(c.layers.values()).filter((l) => l.kind !== 'asset').length;
+        if (kind !== 'asset' && layersOf(this) >= 8) return refuse('too many layers');
+        if (kind !== 'asset' && FakeClient.all.reduce((n, c) => n + (c.ready ? layersOf(c) : 0), 0) >= 32) return refuse('too many layers');     // CompositorLimits.layers
         const bytes = kind === 'image' ? o.iw * o.ih * 4 * 2 : kind === 'asset' ? o.w * o.h * (o.format === 'r8' ? 1 : 4) * 2 : 0;
-        if (FakeClient.memory() + bytes > 16 * 1024 * 1024) { this.refused.push(o.target + ': pixel memory is full'); return ref; }
+        if (FakeClient.memory() + bytes > 16 * 1024 * 1024) return refuse("the service's pixel memory is full");
         this.layers.set(ref, Object.assign({ kind, visible: 1, bytes }, o));
         return ref;
     }
@@ -55,7 +62,7 @@ class FakeClient {
     uniformsOf(test) { const l = Array.from(this.layers.values()).find(test); return (l && l.uniforms) || {}; }
     pixels(ref, rects, px) { this.writes++; this.sent.push({ ref, rects, px }); }
     drop(ref) { this.layers.delete(ref); }
-    targets() { return Array.from(new Set(Array.from(this.layers.values()).map((l) => l.target))); }
+    drawnTargets() { return Array.from(new Set(Array.from(this.layers.values()).map((l) => l.target))); }
     shown() { return Array.from(this.layers.values()).filter((l) => l.visible); }
     alertLayers() { return this.shown().filter((l) => l.klass === 'alert'); }
 }
@@ -160,9 +167,9 @@ const tests = {
         await wait(500);         // the first app of the run also bakes the centre page's first frame (fonts, EVA-01)
         assert.strictEqual(FakeClient.all.length, 3, 'the HUD, the dash, and the dash\'s bottom strips');
         assert.strictEqual(new Set(FakeClient.all.map((c) => c.name)).size, 3);
-        assert.deepStrictEqual(FakeClient.all[2].targets(), ['panel']);
-        assert.deepStrictEqual(a.hud().targets(), ['hud']);
-        assert.deepStrictEqual(a.dash().targets(), ['panel']);
+        assert.deepStrictEqual(FakeClient.all[2].drawnTargets(), ['panel']);
+        assert.deepStrictEqual(a.hud().drawnTargets(), ['hud']);
+        assert.deepStrictEqual(a.dash().drawnTargets(), ['panel']);
     },
     async 'neither connection is refused a layer, normal or in an alert'() {
         const a = startApp({ screens: 'both', alertPreview: 'knock' });
@@ -220,8 +227,8 @@ const tests = {
     },
     async 'the HUD\'s calibration grid still works'() {
         const a = startApp({ screens: 'grid' });
-        await wait(150);
-        assert.ok(a.hud().layers.size > 0 && a.hud().layers.size <= 2);
+        await wait(SETTLE_MS);
+        assert.ok(a.hud().layers.size > 0 && a.hud().layers.size <= 2, 'HUD layers: ' + a.hud().layers.size + ' ' + JSON.stringify(Array.from(a.hud().layers.values()).map((l) => l.kind + ' ' + l.w + 'x' + l.h)) + ' ' + a.lines.slice(-6).join(' | '));
         assert.strictEqual(a.dash().layers.size, 0);
     },
     async 'settings saved by an older version are ignored: the HUD alone, in every drive mode'() {
@@ -490,7 +497,7 @@ const tests = {
                 if (want !== lit(x, y)) wrong++;
             }
         }
-        assert.ok(ink > 3000, ink + ' lit pixels');
+        assert.ok(ink > 2000, ink + ' lit pixels');     // ~2700 with the free Eva-Ming clock font (c8a83ba), thinner than the font this was written for
         assert.ok(wrong < ink * 0.01, wrong + ' of ' + ink + ' pixels differ');
     },
     async 'the colon hides with the rest for an alert and a pop-up, and is the only part of the clock that breathes'() {
@@ -1143,12 +1150,12 @@ const tests = {
     async 'the dash stays on the whole cluster unless the menu picks design A'() {
         const a = startApp({ screens: 'dash' });
         await wait(150);
-        assert.deepStrictEqual(a.dash().targets(), ['panel']);
+        assert.deepStrictEqual(a.dash().drawnTargets(), ['panel']);
     },
     async 'design A draws under BMW\'s gauges on the map target, asking for the slot and leaving BMW\'s turn box alone'() {
         const a = startApp({ screens: 'dash', dashDesign: 'a' });
         await wait(150);
-        assert.deepStrictEqual(a.dash().targets(), ['map']);
+        assert.deepStrictEqual(a.dash().drawnTargets(), ['map']);
         assert.strictEqual(a.dash().layers.size, 5);
         assert.deepStrictEqual(a.dash().refused, []);
         assert.strictEqual(a.hud().layers.size, 0);
@@ -1171,12 +1178,12 @@ const tests = {
         const hudLayers = Array.from(a.hud().layers.keys()).join();
         a.set('bothDash', 'a');
         await wait(200);
-        assert.deepStrictEqual(a.dash().targets(), ['map']);
+        assert.deepStrictEqual(a.dash().drawnTargets(), ['map']);
         assert.strictEqual(a.dash().layers.size, 5);
         assert.strictEqual(Array.from(a.hud().layers.keys()).join(), hudLayers, 'the HUD was redrawn');
         a.set('bothDash', 'whole');
         await wait(200);
-        assert.deepStrictEqual(a.dash().targets(), ['panel']);
+        assert.deepStrictEqual(a.dash().drawnTargets(), ['panel']);
         assert.deepStrictEqual(a.dash().refused, []);
     },
     async 'turning the dash off after design A leaves nothing behind'() {
@@ -1194,7 +1201,7 @@ const tests = {
             a.set('alertPreview', id);
             await wait(150);
             assert.strictEqual(a.dash().alertLayers().length, 3, id);
-            assert.deepStrictEqual(a.dash().targets(), ['map'], id);
+            assert.deepStrictEqual(a.dash().drawnTargets(), ['map'], id);
             assert.strictEqual(counts.evas[1].alertLayout.name, 'EVA centre alert', id);
         }
         assert.deepStrictEqual(a.dash().refused, []);
@@ -1204,6 +1211,8 @@ const tests = {
     async 'design A keeps its images through an alert, and sends them only once'() {
         const a = startApp({ screens: 'dash', dashDesign: 'a', demo: 'off' });
         await wait(SETTLE_MS);
+        a.hu.feed('de.bmw.infotainment.vehicle.Vehicle2', 'statusCarSpeed2', { speedVehicleCentreOfGravity: 0 });     // a preview needs a standing car
+        await wait(400);       // the design shows the standing car first: what the alert's end sends is then only the alert's doing
         const dash = counts.evas[1], gearRef = dash.widgets.get('gear').ref, textRef = dash.widgets.get('text').ref;
         a.set('alertPreview', 'heat');
         await wait(200);
@@ -1216,7 +1225,9 @@ const tests = {
         assert.strictEqual(a.dash().shown().length, 5);
         assert.strictEqual(a.dash().layers.size, 8, 'the alert\'s layers stay, hidden, for the next one');
         const big = a.dash().sent.slice(before).reduce((n, s) => n + s.px.length, 0);
-        assert.ok(big < 200 * 1024, big + ' bytes sent when the alert ended');
+        const per = {};
+        a.dash().sent.slice(before).forEach((x) => { const w = Array.from(dash.widgets.values()).find((q) => q.ref === x.ref); const k = w ? w.w.id : 'ref' + x.ref; per[k] = (per[k] || 0) + x.px.length; });
+        assert.ok(big < 200 * 1024, big + ' bytes sent when the alert ended: ' + JSON.stringify(per));
         const sent = a.dash().sent.length;
         a.set('alertPreview', 'heat');
         await wait(200);
@@ -1335,10 +1346,10 @@ const tests = {
     async 'every design can be picked in the menu in any order, with nothing refused or left behind'() {
         const a = startApp({ screens: 'dash' });
         await wait(SETTLE_MS);
-        for (const [design, target, n] of [['a', 'map', 5], ['b', 'map', 3], ['d', 'panel', 5], ['whole', 'panel', 5], ['c1', 'map', 4], ['c2', 'map', 3], ['c3', 'panel', 6], ['e1', 'map', 4], ['e2', 'map', 4], ['e3', 'panel', 6], ['b', 'map', 3], ['e2', 'map', 4], ['d', 'panel', 5]]) {
+        for (const [design, target, n] of [['a', 'map', 5], ['b', 'map', 3], ['d', 'panel', 5], ['whole', 'panel', 5], ['c1', 'map', 4], ['c3', 'panel', 6], ['e1', 'map', 4], ['e2', 'map', 4], ['e3', 'panel', 6], ['b', 'map', 3], ['e2', 'map', 4], ['d', 'panel', 5]]) {
             a.set('dashDesign', design);
             await wait(200);
-            assert.deepStrictEqual(a.dash().targets(), [target], design);
+            assert.deepStrictEqual(a.dash().drawnTargets(), [target], design);
             assert.strictEqual(a.dash().layers.size, n, design);
             assert.deepStrictEqual(a.dash().refused, [], design);
         }
@@ -1452,7 +1463,7 @@ const tests = {
     async 'design D covers the cluster and shows the alert as the original does'() {
         const a = startApp({ screens: 'dash', dashDesign: 'd', alertPreview: 'heat' });
         await wait(300);
-        assert.deepStrictEqual(a.dash().targets(), ['panel']);
+        assert.deepStrictEqual(a.dash().drawnTargets(), ['panel']);
         assert.strictEqual(a.dash().alertLayers().length, 3);
         assert.deepStrictEqual(a.dash().refused, []);
         assert.strictEqual(counts.evas[1].alertLayout.name, 'EVA dash alert');
@@ -1501,7 +1512,7 @@ const tests = {
         await wait(SETTLE_MS);
         drive(a, 'SPORT');
         await wait(200);
-        assert.deepStrictEqual(a.dash().targets(), ['map']);
+        assert.deepStrictEqual(a.dash().drawnTargets(), ['map']);
         assert.strictEqual(a.dash().layers.size, 5);
     },
     async 'the everyday designs\' ground is plain black, and design A keeps its hex lines'() {
@@ -1585,17 +1596,6 @@ const tests = {
         assert.deepStrictEqual(seven.u_digits, [4, 1, 2, 0]);
         assert.deepStrictEqual(seven.u_colon, [0]);
     },
-    async 'C2 draws each line in the font that fills the shape with it'() {
-        const a = startApp({ screens: 'dash', dashDesign: 'c2', demo: 'off', motto: 'run' });
-        await wait(SETTLE_MS);
-        const dash = counts.evas[1], p = dash.widgets.get('text').w.parts.find((q) => q.id === 'row1');
-        const look = dash._partLook(p, Date.now());
-        const big = dash._partPixels(p, look);
-        a.set('motto', 'heaven');
-        await wait(150);
-        assert.notStrictEqual(dash._partPixels(p, look).compare(big), 0, 'the same words should be sized for this line');
-        assert.deepStrictEqual(a.dash().refused, []);
-    },
     async 'in P, R and N the line steps aside for the big word, and its small line says what the word means'() {
         const a = startApp({ screens: 'dash', dashDesign: 'c1', demo: 'off', motto: 'heaven' });
         await wait(SETTLE_MS);
@@ -1619,7 +1619,7 @@ const tests = {
         assert.strictEqual(['0', '1', '2', '3', '4', '5', '6'].map((i) => at(2, i)).join(''), '第3段階進行中', 'the space is left out');
     },
     async 'every design shows every alert with nothing refused, and comes back to the same layers'() {
-        for (const design of ['c1', 'c2', 'c3', 'e1', 'e2', 'e3']) {
+        for (const design of ['c1', 'c3', 'e1', 'e2', 'e3']) {
             const a = startApp({ screens: 'dash', dashDesign: design });
             await wait(SETTLE_MS);
             const n = a.dash().shown().length;
@@ -1655,12 +1655,12 @@ const tests = {
         assert.strictEqual(a.dash().layers.size, 0);
     },
     async 'Dash only: each drive mode shows the dash picked for it, and Off leaves it to BMW'() {
-        const a = startApp({ screens: 'dash', dashComfort: 'c2', dashSport: 'a', dashEco: 'e2', _menuV: 2 });
+        const a = startApp({ screens: 'dash', dashComfort: 'c1', dashSport: 'a', dashEco: 'e2', _menuV: 2 });
         await wait(SETTLE_MS);
         const dash = counts.evas[1], at = async (mode) => { drive(a, mode); await wait(200); return dash.activeName; };
         assert.strictEqual(await at('SPORT'), 'a');
-        assert.deepStrictEqual(a.dash().targets(), ['map']);
-        assert.strictEqual(await at('COMFORT'), 'c2');
+        assert.deepStrictEqual(a.dash().drawnTargets(), ['map']);
+        assert.strictEqual(await at('COMFORT'), 'c1');
         assert.strictEqual(await at('ECO PRO'), 'e2');
         assert.strictEqual(a.hud().layers.size, 0);
         a.set('dashEco', 'off');
@@ -1670,18 +1670,18 @@ const tests = {
         assert.strictEqual(a.hud().layers.size, 0);
     },
     async 'HUD + Dash: each drive mode has its own pair, separate from the other modes\' choices'() {
-        const a = startApp({ screens: 'both', demo: 'off', _menuV: 2, hudSport: 'eco', dashSport: 'c2',
+        const a = startApp({ screens: 'both', demo: 'off', _menuV: 2, hudSport: 'eco', dashSport: 'c1',
             bothHudComfort: 'comfort', bothDashComfort: 'c1', bothHudSport: 'eva', bothDashSport: 'a', bothHudEco: 'off', bothDashEco: 'e3' });
         await wait(SETTLE_MS);
         const hud = counts.evas[0], dash = counts.evas[1];
         const at = async (mode) => { drive(a, mode); await wait(250); return [hud.activeName, dash.activeName]; };
         assert.deepStrictEqual(await at('SPORT'), ['eva', 'a']);
-        assert.deepStrictEqual(a.hud().targets(), ['hud']);
-        assert.deepStrictEqual(a.dash().targets(), ['map']);
+        assert.deepStrictEqual(a.hud().drawnTargets(), ['hud']);
+        assert.deepStrictEqual(a.dash().drawnTargets(), ['map']);
         assert.deepStrictEqual(await at('COMFORT'), ['hud_only_comfort', 'c1']);
         assert.deepStrictEqual(await at('ECO PRO'), ['off', 'e3']);
         assert.strictEqual(a.hud().layers.size, 0);
-        assert.deepStrictEqual(a.dash().targets(), ['panel']);
+        assert.deepStrictEqual(a.dash().drawnTargets(), ['panel']);
         assert.deepStrictEqual(a.hud().refused.concat(a.dash().refused), []);
     },
     async 'changing one screen\'s picture leaves the other screen alone'() {
@@ -1701,10 +1701,10 @@ const tests = {
         assert.strictEqual(Array.from(a.dash().layers.keys()).join(), dashLayers, 'changing the HUD redrew the dash');
     },
     async 'before the car names a drive mode, Comfort\'s picture shows'() {
-        const a = startApp({ screens: 'both', demo: 'off', _menuV: 2, bothHudComfort: 'comfort', bothDashComfort: 'c2', bothHudSport: 'sport', bothDashSport: 'a' });
+        const a = startApp({ screens: 'both', demo: 'off', _menuV: 2, bothHudComfort: 'comfort', bothDashComfort: 'c1', bothHudSport: 'sport', bothDashSport: 'a' });
         await wait(SETTLE_MS);
         assert.strictEqual(counts.evas[0].activeName, 'hud_only_comfort');
-        assert.strictEqual(counts.evas[1].activeName, 'c2');
+        assert.strictEqual(counts.evas[1].activeName, 'c1');
     },
     async 'a picture for another mode or drive mode changes nothing on the screens'() {
         const a = startApp({ screens: 'hud', demo: 'off', _menuV: 2 });
@@ -1813,7 +1813,7 @@ const tests = {
         assert.strictEqual(a.hu.settings.get('dashComfort'), 'whole', 'the saved value is rewritten');
         assert.strictEqual(a.hu.settings.get('bothDashComfort'), 'whole');
         assert.strictEqual(dash.activeName, 'eva');
-        assert.deepStrictEqual(a.dash().targets(), ['panel']);
+        assert.deepStrictEqual(a.dash().drawnTargets(), ['panel']);
         drive(a, 'SPORT');
         await wait(200);
         assert.strictEqual(dash.activeName, 'eva');
@@ -2159,6 +2159,19 @@ const tests = {
         rec.targets.find((t) => t.key === 'button:dismissAlert').run();
         await wait(200);
         assert.strictEqual(a.hu.settings.get('dismissAlert'), false, 'a button: back off at once');
+    },
+    async 'every design and Mode in the menu has its layout file in the build'() {
+        const spec = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/eva_hud/app.json'), 'utf8'));
+        const dir = path.join(ROOT, 'apps/eva_hud/hud/layouts'), has = (n) => fs.existsSync(path.join(dir, n + '.json'));
+        const missing = [];
+        spec.settings.filter((st) => /^(both)?[dD]ash(Comfort|Sport|Eco)$/.test(st.key)).forEach((st) => st.options.forEach(([v]) => {
+            if (v !== 'off' && !has('dash_' + (v === 'whole' ? 'eva' : v))) missing.push(st.key + '=' + v);
+        }));
+        spec.settings.filter((st) => /^(both)?[hH]ud(Comfort|Sport|Eco)$/.test(st.key)).forEach((st) => st.options.forEach(([v]) => {
+            if (v !== 'off' && !has(v) && !has('hud_only_' + v) && !has(v === 'sqhud' ? 'hud_sq' : 'hud_' + v)) missing.push(st.key + '=' + v);     // eva_hud.js HUD_ONLY
+        }));
+        if (!has('grid')) missing.push('screens=grid');
+        assert.deepStrictEqual(missing, [], 'picked on the car, these would draw nothing');
     },
     async 'a dash that cannot start leaves the HUD running and says so'() {
         const a = startApp({ screens: 'both' }, { dashThrows: true });

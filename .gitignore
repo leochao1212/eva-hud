@@ -1,5 +1,7 @@
 # build output and the BMW oap-sdk (not redistributable)
 dist/
+dist-test/
+dist-bench/
 oap-sdk/
 *.log
 bench/.data/

@@ -13,13 +13,14 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..');
 const HUD = path.join(ROOT, 'apps/shadow_dash/hud');
-const STAGE = path.join(ROOT, 'dist', 'shadow_dash');
+process.env.MGU_DIST = process.env.MGU_DIST || 'dist-test';     // its own build folder: never the release's or the bench's
+const STAGE = path.join(ROOT, process.env.MGU_DIST, 'shadow_dash');
 const THEMES = require(path.join(ROOT, 'shared/hud_themes')).THEMES;
 const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 const load = (name) => JSON.parse(fs.readFileSync(path.join(HUD, 'layouts', name + '.json'), 'utf8'));
 
 const PHOTO_BYTES = 1920 * 640 * 4;
-const PIXEL_MEMORY = 16 * 1000 * 1000;   // cluster-render's, shared by all clients (PROTOCOL.md)
+const PIXEL_MEMORY = 16 * 1024 * 1024;   // cluster-render's 16 MiB, shared by all clients (PROTOCOL.md; as eva_dash_test.js)
 const ETC2_BYTES = 1920 * 640;           // etc2rgba: 1 byte a pixel
 const CLEAR_Y = 636;   // instruments stay above BMW's bottom strip
 // BMW's gear letter in the bottom strip. Covering it makes the kombi paint a black box on top.
@@ -126,7 +127,7 @@ function layoutTests() {
         });
         assert.ok(fs.existsSync(path.join(ROOT, 'apps/eva_hud/hud/photos/cockpit.rgba')), 'the cockpit photo stays with EVA');
         const shadow = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/shadow_dash/app.json'), 'utf8'));
-        assert.strictEqual(shadow.version, '1.5.0');
+        assert.strictEqual(shadow.version, '1.5.1');
         assert.strictEqual(shadow.id, 'shadow_dash');
         assert.deepStrictEqual(shadow.mguHmi, ['ID7']);
         assert.strictEqual(shadow.id7Only, true);

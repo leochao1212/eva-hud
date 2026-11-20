@@ -1,0 +1,9 @@
+{
+ "schemaVersion": 2,
+ "name": "Calibration grid",
+ "_about": "HUD calibration (Mode: HUD calibration grid): lines every 50 px, every second one bright, and the x / y every 100 px, to photograph through the windshield and measure what of the 800x480 HUD target the driver sees. After bimmer-lab/apps' grid (MIT), its first two widgets only: two layers.",
+ "widgets": [
+  {"id": "grid", "type": "grid", "x": 0, "y": 0, "w": 800, "h": 480, "step": 50, "major": 2},
+  {"id": "grid_labels", "type": "gridlabels", "z": 5, "x": 0, "y": 0, "w": 800, "h": 480, "step": 100, "font": "e_ui"}
+ ]
+}
